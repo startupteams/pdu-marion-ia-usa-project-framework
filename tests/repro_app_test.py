@@ -3,7 +3,7 @@
 import base64, builtins, json, os, sys, tempfile, threading, time, shutil
 from pathlib import Path
 
-ROOT = Path("/home/jordatech/work/pdu-marion-ia-usa-project-framework")
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "app"))
 
 tmp = Path(tempfile.mkdtemp(prefix="pdu-repro-"))
@@ -64,4 +64,6 @@ for name, code, passed in checks:
     print(("PASS" if passed else "FAIL"), name, "->", code)
     ok = ok and passed
 print("REPRO_RESULT:", "PASS" if ok else "FAIL")
-sys.exit(0 if ok else 1)
+
+if __name__ == "__main__":
+    sys.exit(0 if ok else 1)
