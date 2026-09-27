@@ -2,9 +2,11 @@
 
 The **MARION-IA-USA PDU Manager** is an internal operations application used to view and safely control rack Power Distribution Unit (PDU) outlets in the MARION-IA-USA server environment.
 
-The production service currently runs on **VM154 on Proxmox host `MIAM-00133`** and is accessed at:
+The production service runs on **VM156 on Proxmox host `MIAM-00133`** and is accessed at:
 
-`https://10.0.20.154/`
+`https://10.0.20.156/`
+
+(Cutover completed 2026-09-27; VM154 is powered off as an untouched fallback, `onboot=0`.)
 
 This repository is intended to become the authoritative source for the application code, requirements, deployment automation, architecture, and operational documentation.
 
@@ -34,8 +36,10 @@ The following environment facts are known and must be verified as part of the so
 | Component | Known role |
 |---|---|
 | `MIAM-00133` | Proxmox host that runs the production PDU Manager VM |
-| VM154 | Production PDU Manager guest |
-| `10.0.20.154` | PDU Manager HTTPS endpoint |
+| VM156 | Production PDU Manager guest (promoted 2026-09-27) |
+| `10.0.20.156` | PDU Manager HTTPS endpoint (production) |
+| VM154 | Powered-off fallback (untouched pre-cutover state; delete/archive is a later decision) |
+| `10.0.20.130` | `pdu-deploy-runner` LXC — GitHub Actions self-hosted runner (deploy jobs only) |
 | `10.0.20.151` | Network-managed PDU endpoint |
 | `10.0.20.152` | Network-managed PDU endpoint |
 | `10.0.20.153` | Network-managed PDU endpoint; networking-related rack loads are visible here |

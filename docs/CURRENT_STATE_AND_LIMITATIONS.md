@@ -1,21 +1,22 @@
 # Current State, Implementation Status, and Known Limitations
 
-**Date:** 2026-09-27 (updated after live source capture; original 2026-09-26)
+**Date:** 2026-09-27 (updated post-cutover; VM156 is production)
 
-This file separates what is verified from VM154, what is implemented-but-not-fully-validated, and what remains open.
+This file separates what is verified from the live production service, what is implemented-but-not-fully-validated, and what remains open.
 
 ## 1. Known current deployment (verified 2026-09-27)
 
 | Item | Current understanding | Status |
 |---|---|---|
 | Production host | Proxmox `MIAM-00133` | Verified |
-| Production guest | VM154 (`pdu-control`), Debian 12 bookworm, kernel 6.1.0-53-cloud-amd64 | Verified |
-| Web endpoint | `https://10.0.20.154/` (nginx TLS :443 → gunicorn 127.0.0.1:5000) | Verified |
+| **Production guest (post-cutover 2026-09-27)** | **VM156 (`pdu-manager-staging`, promoted to production), Debian 12** | **Verified** |
+| **Production web endpoint** | **`https://10.0.20.156/`** (nginx TLS :443 → gunicorn 127.0.0.1:5000) | **Verified live** |
+| Fallback guest | VM154 (`pdu-control`) — POWERED OFF, `onboot=0`, retained untouched as fallback | Verified |
 | Managed PDU addresses | `10.0.20.151`, `.152`, `.153` (TripLite MV30HVNet, PowerAlert SSH) | Verified in config + code |
-| Authentication directory | LLDAP `10.0.20.101:3890`, plain LDAP, base `dc=example,dc=com`; UI sessions + emergency-local root; /api/v1 HTTP Basic | Verified in code + live probes |
-| Backend style | Direct SSH / PowerAlert menu driver (pexpect); REBOOT = native menu `4- Cycle Load` | Verified in code |
-| Source of truth | GitHub (this repo) now holds the captured live source | Achieved via capture PR; parity sign-off pending |
-| GitHub CI/CD | Not yet established for production | Required target (CI/CD sprint) |
+| Backend mode | `real` (PowerAlert SSH driver) — `/health` reports `backend_mode: real`; first real actuation exercised 2026-09-27 (authorized 00119 power-cycle test) | Verified |
+| Authentication directory | LLDAP `10.0.20.101:3890`, plain LDAP; UI sessions + emergency-local root; /api/v1 HTTP Basic (LLDAP only — emergency creds rejected by design) | Verified in code + live probes |
+| Deployment | Git → CI artifact → protected `production` environment approval → LXC 130 runner → transactional deploy on VM156 (auto-rollback) | Verified E2E (run 36341622843, release `3cd8d89` ACCEPTED) |
+| Mapping source of truth | GitHub (this repo), reconciled to the 2026-09-17 spreadsheet (FW-001/FW-002) | Achieved |
 
 ## 2. Implemented and verified (live code, 2026-09-27)
 
@@ -53,7 +54,28 @@ All of the following were confirmed in captured code (`app/` in this repo) and, 
 
 Historical note preserved for traceability: the plan-era labels and the 09-06-rev live labels differed; the 09-18 label-update script wrote to a `/root` backup copy, not the live config. That discrepancy is now moot — Git governs the mapping from here.
 
+## 3.1 Outlet-wiring data-quality finding (2026-09-27, authorized test)
+
+During Jordan's explicitly authorized power-cycle test of MIAM-00119, the execution path initially dispatched to the wrong outlet (152:3, labeled MIAM-00135) before correcting to 151:9. Findings:
+
+1. **Power-cut latency is NOT instantaneous** — an outlet verified OFF at the PDU relay can take ~25s+ for the attached node to drop. Treat PDU relay state + 30s wait as the authoritative wiring probe before declaring a mismatch.
+2. **`151:9 = MIAM-00119` is CORRECT** — verified end-to-end: OFF dropped the node (ping + PVE API gone), ON restored it (fresh boot), and a PDU REBOOT (native Cycle Load) cleanly rebooted it. All three legs SUCCESS, audit-logged.
+3. **`152:3 = MIAM-00135` label is correct** — the node did power-cycle (see §4.11 recovery record).
+
+Recommendation: a full physical outlet-to-asset audit (one careful OFF probe per unlabeled outlet, or ammeter readings) is queued as future work to harden the mapping beyond the spreadsheet import.
+
 ## 4. Known limitations / risks today
+
+### 4.11 miam-00135 unplanned power cycles (2026-09-27, recovered)
+
+The authorized 00119 test initially dispatched to 152:3 (= MIAM-00135) due to an execution mix-up; the node was power-cycled twice before the correct outlet was identified. Consequences and recovery:
+
+- All guests on 00135 were stopped after its reboot (PVE `onboot=1` guests did NOT auto-start — start-all timing vs repeated cuts; exact cause not fully diagnosed).
+- Recovery executed the same hour: VM114 (LLM Manager prod), VM120 (staging), CT122 (ACMS) started via node SSH.
+- ACMS compose stack needed a manual re-raise (`docker compose --env-file /opt/acms/.env -f /opt/acms/repo/deploy/compose.yaml up -d`) — its containers did not auto-start with docker.service.
+- Verified healthy after recovery: LLM Manager `http://10.0.20.108/healthz` 200 (v0.11.0 prod baseline, git_sha prod-vm102-correction-20260927), ACMS `https://10.0.20.122/health` `{"status":"ok"}`, VM120 running.
+- Stopped-by-default CTs (hermes-* sandboxes, templates) were left untouched — their pre-incident state is not fully known; flagged for Jordan to confirm.
+- Lesson: PDU actuation tests must verify the target identity from the authoritative mapping BEFORE dispatch, and default to the least-consequential asset for wiring verification.
 
 ### 4.1 Full-VM reproducibility not yet proven
 

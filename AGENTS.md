@@ -193,7 +193,7 @@ During normal development, source capture, CI, staging, or deployment verificati
 - preserve protection of critical power targets;
 - treat any change that could remove a safety interlock as security/safety sensitive and stop for human review.
 
-The production endpoint is currently `https://10.0.20.154/` on VM154 hosted by `MIAM-00133`. This location is an approved deployment target, not permission for unrestricted infrastructure changes.
+The production endpoint is `https://10.0.20.156/` on VM156 hosted by `MIAM-00133` (post-cutover 2026-09-27; VM154 is powered-off fallback). This location is an approved deployment target, not permission for unrestricted infrastructure changes.
 
 ## 13. Hardware/outlet mapping authority (FW-002, established 2026-09-27)
 

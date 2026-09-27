@@ -5,8 +5,10 @@ This document explains the operational purpose and safe-use model of the MARION-
 ## 1. Production location
 
 - Proxmox host: `MIAM-00133`
-- Guest: VM154 (`pdu-control`)
-- Web interface: `https://10.0.20.154/`
+- Guest: **VM156** (production; promoted from staging 2026-09-27)
+- Web interface: `https://10.0.20.156/`
+- Fallback: VM154 (powered off, untouched; `qm start 154` restores the pre-cutover world)
+- Deployment runner: LXC 130 `pdu-deploy-runner` (GitHub Actions; restricted to deploy jobs + VM156)
 
 **Captured facts (2026-09-27):**
 
