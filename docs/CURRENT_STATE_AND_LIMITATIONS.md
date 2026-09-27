@@ -71,25 +71,25 @@ All credentials live in `/etc/pdu-control/secrets.env` (B64, 640 root:pducontrol
 
 `/root/` contains bootstrap scripts, 8+ app.py backups, config backups, CLI experiments, and full pre-upgrade snapshots. They are EXCLUDED from the repo capture (classified in `CAPTURE_MANIFEST.md`) but still exist on the VM — cleanup is a future human decision.
 
-### 4.5 CI/CD not yet implemented
+### 4.5 CI/CD implemented (2026-09-27, updated)
 
-No GitHub Actions workflows exist. Changes cannot yet flow branch → CI → staging → production. This is the next sprint's scope (safe PR CI, immutable artifacts, staging deploy, protected production deploy, rollback).
+GitHub Actions CI + immutable artifacts + transactional deploys with auto-rollback are live (CI/CD sprint PRs #7–#9). A protected `production` environment (required reviewer: jordatech) and a production-deploy workflow now exist (Future Work v2 Phase D, PR #14). VM156 runs the current main release with the REAL backend (promotion provisioning 2026-09-27).
 
 ### 4.6 Automated real-hardware testing is unsafe and not done
 
 All repo tests run with redirected fixture paths and no network. No test actuates a PDU. The V3-era live rejection-matrix evidence (403s on protected outlets) is preserved in `docs/vm-docs/TEST-RESULTS.md`.
 
-### 4.7 Audit log has no rotation
+### 4.7 Audit log rotation — repo-side implemented (FW-015, 2026-09-27)
 
-`/var/log/pdu-control/audit.log{,.jsonl}` grows unbounded (~170 KB after ~6 weeks — small, but unbounded). Add logrotate in a future PR.
+`deploy/logrotate/pdu-control` (weekly, keep 12, compress, copytruncate) ships in the repo; install on a VM is one copy command (documented in OPERATIONS). VM154's local logrotate state is unchanged until cutover — installing there before cutover is unnecessary; VM156 gets it with the next on-box provisioning pass.
 
-### 4.8 Runner trust boundary undecided
+### 4.8 Runner trust boundary — ADR-0005 Proposed
 
-A self-hosted deployment runner is required for private-network CD. Placement/permissions need an approved ADR before implementation.
+A self-hosted deployment runner LXC (130, MIAM-00133) is drafted in ADR-0005 (PROPOSED): scope = repo deploy jobs + VM156 SSH only, no PDU credentials on the runner. Awaiting Jordan's approval; until then the agent-over-SSH path remains the documented deploy mechanism.
 
-### 4.9 SNMP_* secrets are loaded but unused
+### 4.9 SNMP_* secrets — removed from Git-managed surfaces (FW-016, 2026-09-27)
 
-The live modules never reference SNMP; the values are vestigial from the pre-V3 CLI experiments. Cleanup candidate (removing the vars from secrets.env requires a maintenance action on VM154 — coordinate).
+`secrets.env.example`, test fixtures no longer reference SNMP. The live modules never read them. The REAL `SNMP_*` values still exist in `/etc/pdu-control/secrets.env` on VM154 (and thus in the copy on VM156) — removing the vars from production secret files is a maintenance action deferred to cutover coordination (never committed to Git either way).
 
 ### 4.10 External monitor dependency
 

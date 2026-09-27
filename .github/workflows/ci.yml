@@ -38,8 +38,8 @@ jobs:
           python -m compileall -q app
           for f in deploy/*.sh; do bash -n "$f"; done
 
-      - name: Config schema validation
-        run: python -c "import json; json.load(open('config/examples/config.example.json')); print('config example OK')"
+      - name: Config schema validation (FW-018)
+        run: python deploy/validate-config.py config/examples/config.example.json
 
       - name: Tests (mock backend, redirected paths, no network, no actuation)
         env:

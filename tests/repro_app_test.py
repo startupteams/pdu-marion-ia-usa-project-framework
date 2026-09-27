@@ -10,9 +10,9 @@ tmp = Path(tempfile.mkdtemp(prefix="pdu-repro-"))
 shutil.copy(ROOT / "config" / "examples" / "config.example.json", tmp / "config.json")
 b64 = lambda s: base64.b64encode(s.encode()).decode()
 (tmp / "secrets.env").write_text(
-    "PDU_USER_B64=%s\nPDU_PASS_B64=%s\nSNMP_VERSION_B64=%s\nSNMP_RO_B64=%s\nSNMP_RW_B64=%s\n"
+    "PDU_USER_B64=%s\nPDU_PASS_B64=%s\n"
     "WEB_USER_B64=%s\nWEB_PASS_B64=%s\nLDAP_SERVICE_USER_B64=%s\nLDAP_SERVICE_PASS_B64=%s\n"
-    % (b64("u"), b64("p"), b64("2c"), b64("ro"), b64("rw"), b64("root"), b64("emerg-pass-1"), b64("svc"), b64("svcpass")))
+    % (b64("u"), b64("p"), b64("root"), b64("emerg-pass-1"), b64("svc"), b64("svcpass")))
 (tmp / "logs").mkdir(); (tmp / "state").mkdir()
 (tmp / "logs" / "audit.log").touch()
 
