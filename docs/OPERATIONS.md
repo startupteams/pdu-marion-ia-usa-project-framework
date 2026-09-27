@@ -64,10 +64,10 @@ A state refresh must be treated as read-only.
 
 Current intended labels include:
 
-- `MIAM-00172 - JetKVM Hardware Console`
-- `MIAM-00182 - TESmart 16-Port HDMI KVM`
+- `MIAM-00172 - JetKVM Hardware Console` (PDU MIAM-00153 / Outlet 12)
+- `MIAM-00182 - TESmart 16-Port HDMI KVM Switch` (PDU MIAM-00153 / Outlet 24)
 
-If the UI shows older JetKVM/KYY/HDMI-splitter wording, compare the live configuration to the authoritative hardware architecture before editing. Code deployment must not overwrite current production labels with stale defaults.
+These are the authoritative labels per the 2026-09-17 server-architecture spreadsheet (reconciled into Git 2026-09-27, FW-001). The GitHub repository is the mapping source of truth (FW-002) unless Jordan supplies a newer authoritative mapping. If the UI shows older JetKVM/KYY/HDMI-splitter wording, the production configuration still carries pre-reconciliation labels — update it via the normal Git-managed deployment/config mechanism, not ad-hoc editing. Code deployment must not overwrite current production labels with stale defaults.
 
 ## 6. Restart versus VM reboot
 

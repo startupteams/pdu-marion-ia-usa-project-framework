@@ -65,8 +65,10 @@ The product shall use the current approved KVM-related asset names in production
 **Acceptance criteria**
 
 - The JetKVM asset is labeled `MIAM-00172 - JetKVM Hardware Console` where applicable.
-- The TESmart KVM asset is labeled `MIAM-00182 - TESmart 16-Port HDMI KVM` where applicable.
+- The TESmart KVM asset is labeled `MIAM-00182 - TESmart 16-Port HDMI KVM Switch` where applicable.
 - Deprecated KVM naming is not reintroduced by deployment defaults or seed configuration.
+
+**Resolution (2026-09-27, FW-001):** the 2026-09-17 server-architecture spreadsheet is the authoritative mapping source (per Future Work v2 §2–§3). Outlet 153:12 = `MIAM-00172 - JetKVM Hardware Console`; outlet 153:24 = `MIAM-00182 - TESmart 16-Port HDMI KVM Switch`. The historical "live = truth" rule applied during capture is superseded for labels by this reconciliation; Git is the mapping source of truth going forward (FW-002).
 
 **Verification**
 

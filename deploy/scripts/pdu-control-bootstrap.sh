@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# ============================================================================
+# LEGACY / HISTORICAL REFERENCE ONLY — NOT the current deployment path.
+#
+# This is the original VM154 bootstrap script (pre-V3, SNMP era). Its embedded
+# config predates the live V3 protection model (it protects 153 outlets
+# [3,4,5,6,12] and embeds an SNMP app that the live V3 app never used).
+# The current deployment path is deploy/install.sh + the immutable release
+# artifact from CI. This file is retained verbatim as historical evidence of
+# how VM154 was originally provisioned (see docs/CAPTURE_MANIFEST.md).
+# Do NOT run this on any new VM.
+# ============================================================================
 export DEBIAN_FRONTEND=noninteractive
 
 echo "=============================================================="

@@ -194,3 +194,17 @@ During normal development, source capture, CI, staging, or deployment verificati
 - treat any change that could remove a safety interlock as security/safety sensitive and stop for human review.
 
 The production endpoint is currently `https://10.0.20.154/` on VM154 hosted by `MIAM-00133`. This location is an approved deployment target, not permission for unrestricted infrastructure changes.
+
+## 13. Hardware/outlet mapping authority (FW-002, established 2026-09-27)
+
+The **GitHub repository is the authoritative source of truth for PDU/outlet/hardware mapping** (asset labels, outlet numbering, protected-outlet rules, PDU inventory) once the initial reconciliation from the 2026-09-17 server-architecture spreadsheet (FW-001) has merged.
+
+Rules:
+
+1. **Mapping changes originate in Git** — a PR that updates `config/examples/config.example.json` (and any related docs/tests), reviewed through normal CI, is the only sanctioned path.
+2. **A newer spreadsheet or mapping supplied explicitly by Jordan supersedes Git** and triggers a reviewed reconciliation PR — not an unmanaged production edit.
+3. **Production UI must not be used to casually edit hardware mapping.** After the VM156 cutover, mapping changes flow Git → approved release → VM156. Direct edits on a production VM are emergency-only (break-glass: document why, preserve pre-change state, minimum change, verify safely, back-port to Git immediately).
+4. **Protection rules are part of the mapping** — changing which outlets are protected is safety-sensitive and requires human review of the PR regardless of how small the diff is.
+5. Agents must never "helpfully" import labels from VM backups, old scripts, or stale docs — only from the current Git configuration or a Jordan-designated authoritative source.
+
+The 2026-09-17 spreadsheet import basis: outlet `MIAM-00153:12` = `MIAM-00172 - JetKVM Hardware Console`; outlet `MIAM-00153:24` = `MIAM-00182 - TESmart 16-Port HDMI KVM Switch` (Future Work v2 §3).

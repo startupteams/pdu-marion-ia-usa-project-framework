@@ -146,3 +146,29 @@ def test_normalize_action():
         asvc.normalize_action("cycle")
     with pytest.raises(ActionError):
         asvc.normalize_action("bogus")
+
+
+def test_fw001_authoritative_kvm_labels():
+    """FW-001 (2026-09-17 spreadsheet reconciliation): Git-managed labels are authoritative.
+
+    REQ-003: 153:12 = MIAM-00172 - JetKVM Hardware Console
+             153:24 = MIAM-00182 - TESmart 16-Port HDMI KVM Switch
+    Stale pre-reconciliation labels must not appear in Git-managed config.
+    """
+    import json as _json
+    cfg = _json.loads((REPO_ROOT / "config" / "examples" / "config.example.json").read_text())
+    pdu153 = next(p for p in cfg["pdus"] if p.get("asset_id") == "MIAM-00153")
+    assert pdu153["labels"]["12"] == "MIAM-00172 - JetKVM Hardware Console"
+    assert pdu153["labels"]["24"] == "MIAM-00182 - TESmart 16-Port HDMI KVM Switch"
+    # stale labels must be gone from the active Git-managed config
+    all_labels = " ".join(str(v) for p in cfg["pdus"] for v in p.get("labels", {}).values())
+    assert "KYY 1080p" not in all_labels
+    assert "MIAM-00173" not in all_labels
+
+
+def test_fw002_protection_rules_intact():
+    """Protection is part of the authoritative mapping — must stay [3,4,5,6,9] on 153."""
+    import json as _json
+    cfg = _json.loads((REPO_ROOT / "config" / "examples" / "config.example.json").read_text())
+    pdu153 = next(p for p in cfg["pdus"] if p.get("asset_id") == "MIAM-00153")
+    assert pdu153["protected"] == [3, 4, 5, 6, 9]

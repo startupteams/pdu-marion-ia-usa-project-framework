@@ -2,78 +2,93 @@
 
 ## Sprint Goal
 
-Capture the current live PDU Manager implementation from VM154 into GitHub, prove that the repository can recreate the service in a safe staging environment, and establish the foundation for reviewed CI/CD deployment.
+Promote VM156 from Git-linked mock staging to the Git-managed production PDU Manager per Future Work v2 (2026-09-27), with VM154 retired to powered-off fallback only after all validation gates pass. (Prior capture + CI/CD sprint completed 2026-09-27: PRs #2–#9, issues #1/#6 closed.)
 
 ## Features in Scope
 
-### Live Source Capture
+### Phase A — Mapping Reconciliation (FW-001/002)
 
 **Requirements**
 
-- `REQ-019`
-- `REQ-024`
-- `REQ-012`
+- `REQ-003`
 
 **Work items**
 
-- [ ] Identify the exact live process and source path on VM154 from runtime evidence.
-- [ ] Capture application/deployment files without copying historical backups as active source.
-- [ ] Produce `docs/CAPTURE_MANIFEST.md`.
-- [ ] Externalize/redact secrets from the Git copy.
-- [ ] Open a human-reviewed source-capture PR.
+- [x] Reconcile 2026-09-17 architecture spreadsheet KVM/PDU labels into Git config, docs, tests.
+- [x] Codify Git-as-mapping-authority governance (AGENTS.md §13, ADR-0004).
+- [x] Mark legacy pre-V3 bootstrap script as historical reference.
 
-### Reproducible Deployment Baseline
+### Phase B/C — VM156 Production Capability (FW-003–007)
 
 **Requirements**
 
-- `REQ-020`
-- `REQ-015`
-- `REQ-018`
+- `REQ-010`, `REQ-015`, plus FW v2 Phase B/C definitions
 
 **Work items**
 
-- [ ] Record exact OS/runtime/dependency/service requirements.
-- [ ] Create deterministic install/deployment automation.
-- [ ] Deploy to a clean staging VM with a non-actuating backend.
-- [ ] Compare staging UI/configuration to current VM154.
+- [ ] Preserve mock backend for CI/staging (verify, don't regress).
+- [ ] Real-backend production configuration mechanism for VM156.
+- [ ] Provision production secrets to VM156 outside Git.
+- [ ] Validate LDAP employee login on VM156.
+- [ ] Validate emergency-local root web login on VM156.
 
-### CI/CD Foundation
+### Phase D — GitHub→VM156 Deployment Pipeline (FW-008–010)
 
 **Requirements**
 
-- `REQ-010`
-- `REQ-021`
-- `REQ-022`
-- `REQ-023`
+- `REQ-021`, `REQ-022`, `REQ-023`
 
 **Work items**
 
-- [ ] Add safe PR CI.
-- [ ] Add immutable release artifact creation.
-- [ ] Propose/approve runner and deployment architecture ADR.
-- [ ] Add staging deployment.
-- [ ] Add protected production deployment and rollback after staging proof.
+- [ ] Least-privilege deployment runner (LXC on MIAM-00133).
+- [ ] Protected `production` GitHub environment + approval gate.
+- [ ] Production deploy workflow (main-only, artifact-verified, non-actuating health checks, auto-rollback).
+- [ ] Full pipeline E2E against VM156 in mock mode.
+- [ ] Repeat rollback drill.
+
+### Phase E — Production Validation (FW-011)
+
+**Work items**
+
+- [ ] Full VM156 validation: app/HTTPS/health, auth paths, config vs spreadsheet, real-backend read-only state reads, logging/state writability, monitoring reachability.
+
+### Hardening (FW-015–019, non-blocking)
+
+**Work items**
+
+- [ ] Audit-log rotation (logrotate).
+- [ ] Remove unused `SNMP_*` secrets from examples/tests.
+- [ ] Remove legacy `app/legacy_app_direct.py` after VM156 parity.
+- [ ] Config schema validation gate before deployment.
+- [ ] Protection-to-asset consistency tests.
+
+### Phase F — Cutover (FW-012/013) — HUMAN-APPROVAL GATED
+
+**Work items**
+
+- [ ] Human-approved cutover runbook presented with all gates green.
+- [ ] Redirect monitoring to VM156.
+- [ ] VM156 `onboot=1` + controlled reboot verification.
+- [ ] VM154 `onboot=0` + controlled shutdown (retain as fallback).
+- [ ] Record cutover in CURRENT_STATE + handoff.
 
 ## Definition of Done
 
-- [ ] The live serving process/source path is unambiguous.
-- [ ] No secrets are committed.
-- [ ] The source-capture PR is reviewable and traces files to VM154.
-- [ ] A clean staging VM can run the service from repository automation.
-- [ ] Automated tests never actuate production PDU outlets.
-- [ ] Documentation is current.
-- [ ] Significant decisions are surfaced through ADRs.
-- [ ] Known technical debt is recorded in TDRs.
-- [ ] Human reviewer approves before merge.
-- [ ] Production deployment is not enabled until staging/rollback validation passes.
+- [ ] All Phase A–E items complete with recorded validation.
+- [ ] No PDU actuation occurred at any point (read-only state reads only).
+- [ ] CI/staging remains mock-only.
+- [ ] Production secrets are outside Git.
+- [ ] Cutover executed only after human approval of the runbook.
+- [ ] CURRENT_STATE.md identifies VM156 as production post-cutover.
+- [ ] ADR/TDR records for significant decisions.
+- [ ] Handoff documentation delivered.
 
 ## Risks / Blockers / Human Decisions Needed
 
-- Exact current application stack and live source directory must be discovered from VM154.
-- Current secret-storage mechanism must be discovered and sanitized before commit.
-- Dedicated self-hosted runner placement/permissions require human approval.
-- Any runtime-model change (for example introducing Docker where production is not currently Dockerized) requires human-approved architecture decision.
+- Phase F cutover requires explicit human approval (Future Work v2 gate) even under session automation authorization.
+- Monitoring redirect to VM156 requires access to the monitor at 10.0.20.172 (coordinate with its owner if not agent-accessible).
+- VM154 final disposition (delete/archive/retain) is a later human decision — not this sprint.
 
 ## Sprint Handoff
 
-At completion, summarize live source path, branch/PR, staging reproduction result, CI results, deployment/rollback status, secrets strategy, ADR/TDR state, and unresolved future work.
+At completion, deliver the handoff markdown (Telegram), covering validation matrix, ADR/TDR state, rollback proof, and exact next actions for the human.
