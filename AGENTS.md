@@ -175,3 +175,22 @@ At the end of a work session or before handing work to another agent/human, prov
 6. ADR/TDR status;
 7. future-work items discovered;
 8. recommended next action.
+
+## 12. PDU Manager production safety additions
+
+This application can control real electrical power. Treat production interactions as high-consequence infrastructure operations.
+
+Agents MUST NOT perform real PDU ON/OFF/REBOOT/CYCLE operations as tests unless a human explicitly authorizes the exact outlet/action for that session.
+
+During normal development, source capture, CI, staging, or deployment verification:
+
+- use mocks/fixtures for actuation behavior;
+- prefer read-only outlet-state checks when technically enforceable;
+- do not reboot VM154 or `MIAM-00133` merely to apply application changes;
+- restart only the application service(s) when a service restart is sufficient;
+- do not modify production outlet labels, presets, protection/lockout settings, or credentials as an incidental test;
+- never place PDU/LDAP/TLS credentials in Git;
+- preserve protection of critical power targets;
+- treat any change that could remove a safety interlock as security/safety sensitive and stop for human review.
+
+The production endpoint is currently `https://10.0.20.154/` on VM154 hosted by `MIAM-00133`. This location is an approved deployment target, not permission for unrestricted infrastructure changes.
