@@ -181,6 +181,17 @@ def backend_description():
     return "Direct SSH / PowerAlert menu (physically verified)"
 
 
+def backend_mode():
+    """Machine-readable backend mode (FW-003/FW-004).
+
+    Returns "mock" or "real" from the PDU_BACKEND environment variable; the
+    service unit's backend-mode.conf drop-in is the authoritative source and
+    deploy/set-backend-mode.sh keeps /etc/pdu-control/backend_mode.json in
+    sync. "real" is also the implicit default when no drop-in exists.
+    """
+    return "mock" if os.environ.get("PDU_BACKEND", "").lower() == "mock" else "real"
+
+
 def is_busy(ip):
     with RUNTIME_LOCK:
         runtime = PDU_RUNTIME[ip]
