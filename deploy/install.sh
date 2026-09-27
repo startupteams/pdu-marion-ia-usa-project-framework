@@ -30,7 +30,7 @@ fi
 echo "== [1/9] OS prerequisites =="
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq python3 python3-venv python3-pip openssh-client nginx nftables openssl ca-certificates >/dev/null
+apt-get install -y -qq python3 python3-venv python3-pip openssh-client nginx nftables openssl ca-certificates rsync >/dev/null
 
 echo "== [2/9] Service identity =="
 id -u "$APP_USER" >/dev/null 2>&1 || useradd --system --home "$OPT_DIR" --shell /usr/sbin/nologin "$APP_USER"
@@ -47,7 +47,7 @@ if [[ -n "$ARTIFACT" ]]; then
   RELEASE_SHA="$(basename "$PAYLOAD" | sed 's/^pdu-manager-//')"
   echo "installing artifact release sha=$RELEASE_SHA"
   RELEASE_DIR="$OPT_DIR/releases/$RELEASE_SHA"
-  mkdir -p "$OPT_DIR/releases"
+  mkdir -p "$OPT_DIR/releases" "$RELEASE_DIR"
   rsync -a --delete "$PAYLOAD/app/" "$RELEASE_DIR/app/" 2>/dev/null || cp -a "$PAYLOAD/app" "$RELEASE_DIR/app"
   cp -a "$PAYLOAD/requirements.txt" "$RELEASE_DIR/"
   cp -a "$PAYLOAD/deploy" "$RELEASE_DIR/" 2>/dev/null || true
@@ -73,6 +73,7 @@ chown -R "$APP_USER:$APP_USER" "$OPT_DIR" "$LOG_DIR" "$STATE_DIR"
 chown root:"$APP_USER" "$OPT_DIR" 2>/dev/null || true
 
 echo "== [7/9] Configuration (preserved if present) =="
+mkdir -p "$ETC_DIR"
 if [[ ! -f "$ETC_DIR/config.json" ]]; then
   SRC_CFG="$(dirname "$0")/../config/examples/config.example.json"
   [[ -n "$ARTIFACT" ]] && SRC_CFG="$(find "$(dirname "$PAYLOAD")" -name 'config.example.json' | head -1)"
@@ -133,7 +134,9 @@ install -m 644 "$NGINX_SRC" /etc/nginx/sites-available/pdu-control
 ln -sfn /etc/nginx/sites-available/pdu-control /etc/nginx/sites-enabled/pdu-control
 rm -f /etc/nginx/sites-enabled/default
 nginx -t
-systemctl enable --now nginx >/dev/null 2>&1 || systemctl restart nginx
+systemctl enable --now nginx >/dev/null 2>&1 || true
+# reload (not just start) so a pre-existing nginx picks up the new site
+systemctl reload nginx 2>/dev/null || systemctl restart nginx
 
 NFT_SRC="$(dirname "$0")/../deploy/nftables.conf"
 [[ -n "$ARTIFACT" ]] && NFT_SRC="$(find "$(dirname "$PAYLOAD")" -path '*deploy/nftables.conf' | head -1)"
