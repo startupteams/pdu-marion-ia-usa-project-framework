@@ -1619,6 +1619,7 @@ def health():
         {
             "status": "ok",
             "backend": rt.backend_description(),
+            "backend_mode": rt.backend_mode(),
             "command_timeout_seconds": COMMAND_TIMEOUT_SECONDS,
             "pdus": [
                 {

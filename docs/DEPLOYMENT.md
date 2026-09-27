@@ -71,6 +71,8 @@ Repository must not contain:
 
 The exact production secret path (verified live): `/etc/pdu-control/secrets.env` — 9 base64-encoded variables (`PDU_USER_B64`, `PDU_PASS_B64`, `SNMP_VERSION_B64`*, `SNMP_RO_B64`*, `SNMP_RW_B64`* — *loaded but unused by live modules*, `WEB_USER_B64`, `WEB_PASS_B64`, `LDAP_SERVICE_USER_B64`, `LDAP_SERVICE_PASS_B64`), permissions 640 root:pducontrol. Placeholders: `deploy/examples/secrets.env.example`.
 
+**VM156 provisioning (FW-004/FW-005):** production secrets/config for the promotion VM are provisioned per `docs/PROVISIONING_VM156.md` — copied from VM154 out-of-Git, ownership 640 root:pducontrol, temp copies shredded. `deploy/set-backend-mode.sh real` refuses to activate the real backend while staging throwaway secrets are still present (fail-safe).
+
 ## 5. Clean install contract
 
 A clean supported staging VM must be deployable from repository automation with no undocumented shell history.
