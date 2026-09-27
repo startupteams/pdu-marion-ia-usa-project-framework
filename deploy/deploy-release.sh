@@ -27,9 +27,15 @@ verify_checksum() {
   dir="$(dirname "$ARTIFACT")"
   sha_file="$dir/$(basename "$ARTIFACT" .tar.gz).sha256"
   if [[ -f "$sha_file" ]]; then
-    (cd "$dir" && sha256sum -c "$(basename "$sha_file")" >/dev/null 2>&1) \
-      || { echo "FATAL: artifact checksum mismatch" >&2; exit 2; }
-    echo "checksum verified: $(basename "$sha_file")"
+    # sha256sum -c needs the basename (sidecars may carry absolute build paths)
+    local expect actual
+    expect="$(awk '{print $1}' "$sha_file")"
+    actual="$(sha256sum "$ARTIFACT" | awk '{print $1}')"
+    if [[ "$expect" != "$actual" ]]; then
+      echo "FATAL: artifact checksum mismatch (expected $expect, got $actual)" >&2
+      exit 2
+    fi
+    echo "checksum verified: $actual"
   else
     echo "WARN: no checksum sidecar for artifact — continuing (verify source!)"
   fi
@@ -40,13 +46,21 @@ rollback() {
   echo "!! ROLLBACK from stage: $stage" >&2
   if [[ -n "${PREV_RELEASE_SHA:-}" && -d "$OPT_DIR/releases/$PREV_RELEASE_SHA" ]]; then
     ln -sfn "$OPT_DIR/releases/$PREV_RELEASE_SHA" "$OPT_DIR/current"
+    # restore the PREVIOUS release's code into the live tree (the switch step
+    # already copied the broken code over /opt/pdu-control; the symlink alone
+    # does not undo that)
+    if [[ -d "$OPT_DIR/releases/$PREV_RELEASE_SHA/app" ]]; then
+      rsync -a "$OPT_DIR/releases/$PREV_RELEASE_SHA/app/" "$OPT_DIR/" --exclude venv --exclude '__pycache__'
+    else
+      rsync -a "$OPT_DIR/releases/$PREV_RELEASE_SHA/" "$OPT_DIR/" --exclude venv --exclude '__pycache__' --exclude deploy --exclude docs
+    fi
   fi
   if [[ -f "$BACKUP_DIR/config-$TS.json" ]]; then
     cp -a "$BACKUP_DIR/config-$TS.json" "$ETC_DIR/config.json"
     echo "config restored from backup"
   fi
   systemctl restart pdu-control || true
-  sleep 2
+  sleep 3
   if "$(dirname "$0")/healthcheck.sh" http://127.0.0.1:5000 app >/dev/null 2>&1; then
     echo "ROLLBACK_OK"
   else
@@ -76,12 +90,18 @@ tar -xzf "$ARTIFACT" -C "$STAGE"
 PAYLOAD="$(find "$STAGE" -maxdepth 1 -type d -name 'pdu-manager-*' | head -1)"
 RELEASE_SHA="$(basename "$PAYLOAD" | sed 's/^pdu-manager-//')"
 echo "release sha: $RELEASE_SHA"
-[[ -d "$PAYLOAD/app" ]] || { echo "FATAL: payload missing app/" >&2; exit 2; }
-
 echo "== [4/8] install into $OPT_DIR/releases/$RELEASE_SHA =="
 mkdir -p "$OPT_DIR/releases"
 rm -rf "$OPT_DIR/releases/$RELEASE_SHA.tmp"
-cp -a "$PAYLOAD/app" "$OPT_DIR/releases/$RELEASE_SHA.tmp"
+if [[ -d "$PAYLOAD/app" ]]; then
+  cp -a "$PAYLOAD/app" "$OPT_DIR/releases/$RELEASE_SHA.tmp"
+else
+  # payload variant: modules directly under the release root (no app/ subdir)
+  mkdir -p "$OPT_DIR/releases/$RELEASE_SHA.tmp/app"
+  for f in "$PAYLOAD"/*.py; do
+    [[ -e "$f" ]] && cp -a "$f" "$OPT_DIR/releases/$RELEASE_SHA.tmp/app/"
+  done
+fi
 cp -a "$PAYLOAD/requirements.txt" "$OPT_DIR/releases/$RELEASE_SHA.tmp/" 2>/dev/null || true
 cp -a "$PAYLOAD/deploy" "$OPT_DIR/releases/$RELEASE_SHA.tmp/" 2>/dev/null || true
 cp -a "$PAYLOAD/docs" "$OPT_DIR/releases/$RELEASE_SHA.tmp/" 2>/dev/null || true
@@ -100,7 +120,11 @@ echo "== [6/8] validate config (no service start yet) =="
 python3 -c "import json; json.load(open('$ETC_DIR/config.json'))" || rollback "config-validate"
 
 echo "== [7/8] switch code into live tree + restart service =="
-rsync -a "$OPT_DIR/releases/$RELEASE_SHA/app/" "$OPT_DIR/" --exclude venv --exclude '__pycache__'
+if [[ -d "$OPT_DIR/releases/$RELEASE_SHA/app" ]]; then
+  rsync -a "$OPT_DIR/releases/$RELEASE_SHA/app/" "$OPT_DIR/" --exclude venv --exclude '__pycache__'
+else
+  rsync -a "$OPT_DIR/releases/$RELEASE_SHA/" "$OPT_DIR/" --exclude venv --exclude '__pycache__' --exclude deploy --exclude docs
+fi
 chown -R "$APP_USER:$APP_USER" "$OPT_DIR"
 systemctl restart pdu-control
 sleep 3
