@@ -41,10 +41,10 @@ The following environment facts are known and must be verified as part of the so
 | `10.0.20.153` | Network-managed PDU endpoint; networking-related rack loads are visible here |
 | `10.0.20.101` | LLDAP service used in this environment; exact PDU Manager integration must be verified |
 
-Current KVM-related asset naming that must not regress:
+Current KVM-related asset naming that must not regress (2026-09-17 architecture spreadsheet; reconciled into Git 2026-09-27, FW-001):
 
-- `MIAM-00172 - JetKVM Hardware Console`
-- `MIAM-00182 - TESmart 16-Port HDMI KVM`
+- `MIAM-00172 - JetKVM Hardware Console` (PDU MIAM-00153 / Outlet 12)
+- `MIAM-00182 - TESmart 16-Port HDMI KVM Switch` (PDU MIAM-00153 / Outlet 24)
 
 ## Safety model
 

@@ -79,7 +79,7 @@
         "9": "MIAM-00133 - Dell 7010 / Proxmox / Tailscale routing",
         "10": "MIAM-00149 - Minisforum Unified Memory",
         "11": "MIAM-00100 - Minisforum MS-01",
-        "12": "MIAM-00172 - JetKVM",
+        "12": "MIAM-00172 - JetKVM Hardware Console",
         "15": "MIAM-00176 - Backup Fans for Servers 1,2,3,4",
         "16": "MIAM-00175 - Fan for Middle rack 10G & 2.5G Switch, MIAM-00147 and MIAM-00149",
         "17": "MIAM-00177 - 45W 7-port USB hub for Wyze cameras and Layla Noise Sensor",
@@ -87,7 +87,7 @@
         "19": "MIAM-00178 - Rugged LACIE 8TB power supply",
         "20": "MIAM-00179 - USB 3.1 hub for MIAM-00100 and Rugged LACIE drives",
         "23": "MIAM-00174 - Fan for Top rack all Dell 7010s, Firewall, 1G Switch, DAS and MIAM-00100",
-        "24": "MIAM-00173 - KYY 1080p monitor / JetKVM / KVM HDMI splitter"
+        "24": "MIAM-00182 - TESmart 16-Port HDMI KVM Switch"
       }
     }
   ]

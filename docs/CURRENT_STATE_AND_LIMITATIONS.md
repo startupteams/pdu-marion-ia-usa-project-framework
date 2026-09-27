@@ -42,16 +42,16 @@ All of the following were confirmed in captured code (`app/` in this repo) and, 
 - `/api/v1` agent API: 8 endpoints, OpenAPI spec captured (`docs/vm-docs/openapi.json`) — live
 - External monitor at 10.0.20.172 polls the UI every ~5 min (downstream consumer) — nginx logs
 
-## 3. KVM naming state (verified live)
+## 3. KVM naming state (reconciled 2026-09-27, FW-001)
 
-**Live configuration (rev 2026-09-06) uses:**
+**Authoritative Git-managed labels (2026-09-17 architecture spreadsheet, per Future Work v2 §3):**
 
-- Outlet 153:12 → `MIAM-00172 - JetKVM`
-- Outlet 153:24 → `MIAM-00173 - KYY 1080p monitor / JetKVM / KVM HDMI splitter`
+- Outlet 153:12 → `MIAM-00172 - JetKVM Hardware Console`
+- Outlet 153:24 → `MIAM-00182 - TESmart 16-Port HDMI KVM Switch`
 
-**The plan-era expected labels** (`MIAM-00172 - JetKVM Hardware Console`, `MIAM-00182 - TESmart 16-Port HDMI KVM`) exist ONLY in `/root` backup copies (2026-09-10/09-18 snapshots) — never in the live config. The 09-18 label-update script wrote to a backup copy, not the live config (live config mtime predates the script run).
+**Reconciled 2026-09-27 (FW-001):** the authoritative labels above come from the 2026-09-17 server-architecture spreadsheet (per Future Work v2 §3) and now supersede both the stale production-era labels (`MIAM-00172 - JetKVM` / `MIAM-00173 - KYY 1080p monitor / JetKVM / KVM HDMI splitter`) seen live on VM154 and the backup-only variants. Jordan supplied the spreadsheet mapping authoritatively in the Future Work v2 document, which explicitly resolves the REQ-003 conflict flagged in the capture handoff: the v2 labels are the required Git-managed production labels. After this reconciliation, the GitHub repository is the mapping source of truth (FW-002) unless Jordan supplies a newer authoritative spreadsheet.
 
-**Rule:** live state is the source of truth. Do not reintroduce backup-only labels. REQ-003 acceptance criteria need human review against operator intent (flagged in capture PR).
+Historical note preserved for traceability: the plan-era labels and the 09-06-rev live labels differed; the 09-18 label-update script wrote to a `/root` backup copy, not the live config. That discrepancy is now moot — Git governs the mapping from here.
 
 ## 4. Known limitations / risks today
 
