@@ -1,0 +1,626 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "PDU Manager API",
+    "version": "1.0.0",
+    "description": "REST API for the MIAM Rack PDU Power Control Center (VM154). HTTP Basic auth with LLDAP credentials. Protected outlets must remain ON; override enables REBOOT/CYCLE only. Idempotent via Idempotency-Key."
+  },
+  "servers": [
+    {
+      "url": "https://10.0.20.154/api/v1"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "basicAuth": {
+        "type": "http",
+        "scheme": "basic"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "AUTH_REQUIRED",
+                  "AUTH_INVALID",
+                  "AUTH_LDAP_UNAVAILABLE",
+                  "NOT_AUTHORIZED",
+                  "UNKNOWN_PDU",
+                  "UNKNOWN_OUTLET",
+                  "INVALID_ACTION",
+                  "INVALID_REQUEST",
+                  "PROTECTED_OUTLET",
+                  "PROTECTED_OFF_FORBIDDEN",
+                  "OVERRIDE_REASON_REQUIRED",
+                  "PROTECTED_ACK_REQUIRED",
+                  "SELF_HOST_ACK_REQUIRED",
+                  "PDU_BUSY",
+                  "DUPLICATE_REQUEST_CONFLICT",
+                  "RATE_LIMITED",
+                  "PDU_SSH_FAILURE",
+                  "UNKNOWN_JOB"
+                ]
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "Me": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "auth_source": {
+            "type": "string",
+            "enum": [
+              "lldap",
+              "emergency-local"
+            ]
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "can_view": {
+            "type": "boolean"
+          },
+          "can_control": {
+            "type": "boolean"
+          },
+          "can_admin_override": {
+            "type": "boolean"
+          },
+          "can_administer_manager": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Outlet": {
+        "type": "object",
+        "properties": {
+          "pdu_id": {
+            "type": "string"
+          },
+          "ip": {
+            "type": "string"
+          },
+          "outlet": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ON",
+              "OFF",
+              "UNKNOWN"
+            ]
+          },
+          "controllable": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "protected": {
+            "type": "boolean"
+          },
+          "self_host_dependency": {
+            "type": "boolean"
+          },
+          "last_verified_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ActionRequest": {
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "on",
+              "off",
+              "reboot"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "admin_override": {
+            "type": "boolean",
+            "default": false
+          },
+          "acknowledge_protected_device": {
+            "type": "boolean",
+            "default": false
+          },
+          "acknowledge_controller_may_go_offline": {
+            "type": "boolean",
+            "default": false
+          },
+          "request_id": {
+            "type": "string"
+          }
+        }
+      },
+      "Accepted": {
+        "type": "object",
+        "properties": {
+          "accepted": {
+            "type": "boolean"
+          },
+          "replayed": {
+            "type": "boolean"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "actor": {
+            "type": "string"
+          },
+          "pdu_id": {
+            "type": "string"
+          },
+          "outlet": {
+            "type": "integer"
+          },
+          "action": {
+            "type": "string"
+          }
+        }
+      },
+      "Job": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "pdu_id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "waiting_for_pdu_lock",
+              "executing",
+              "verifying",
+              "succeeded",
+              "failed"
+            ]
+          },
+          "action": {
+            "type": "string"
+          },
+          "current_outlet": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "queue_index": {
+            "type": "integer"
+          },
+          "queue_total": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        }
+      },
+      "BatchRequest": {
+        "type": "object",
+        "required": [
+          "action",
+          "targets"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "on",
+              "off",
+              "reboot"
+            ]
+          },
+          "targets": {
+            "type": "array",
+            "maxItems": 72,
+            "items": {
+              "type": "object",
+              "required": [
+                "pdu_id",
+                "outlet"
+              ],
+              "properties": {
+                "pdu_id": {
+                  "type": "string"
+                },
+                "outlet": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "reason": {
+            "type": "string"
+          },
+          "admin_override": {
+            "type": "boolean"
+          },
+          "acknowledge_protected_device": {
+            "type": "boolean"
+          },
+          "acknowledge_controller_may_go_offline": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "basicAuth": []
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "security": [],
+        "summary": "Liveness (no auth)",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/me": {
+      "get": {
+        "summary": "Identity + permissions",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Auth failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pdus": {
+      "get": {
+        "summary": "PDU inventory",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/pdus/{pdu_id}/outlets/{outlet}": {
+      "get": {
+        "summary": "Outlet detail",
+        "parameters": [
+          {
+            "name": "pdu_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "outlet",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 24
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Outlet"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown PDU/outlet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pdus/{pdu_id}/outlets/{outlet}/actions": {
+      "post": {
+        "summary": "Submit one outlet action (idempotent)",
+        "parameters": [
+          {
+            "name": "pdu_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "outlet",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Accepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Policy (protected/override)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown target",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Busy or idempotency conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "PDU communication failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/actions/batch": {
+      "post": {
+        "summary": "Batch actions on explicit targets (idempotent)",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "403": {
+            "description": "Policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}": {
+      "get": {
+        "summary": "Job status / completed history",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/audit": {
+      "get": {
+        "summary": "Structured audit tail (viewer+)",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "403": {
+            "description": "Not authorized"
+          }
+        }
+      }
+    }
+  }
+}
