@@ -5,10 +5,24 @@ This document explains the operational purpose and safe-use model of the MARION-
 ## 1. Production location
 
 - Proxmox host: `MIAM-00133`
-- Guest: VM154
+- Guest: VM154 (`pdu-control`)
 - Web interface: `https://10.0.20.154/`
 
-Exact application service name, runtime path, log path, and restart command must be populated from live source capture and then kept current here.
+**Captured facts (2026-09-27):**
+
+| Item | Value |
+|---|---|
+| Service | `pdu-control.service` (systemd, enabled, Restart=always/5s) |
+| App runtime | Flask 3.1.3 + gunicorn 26.1.0 (1 worker, 4 threads) in `/opt/pdu-control/venv`, Python 3.11.2 |
+| Bind | 127.0.0.1:5000 (localhost only; nginx terminates TLS :443) |
+| App code | `/opt/pdu-control/*.py` (owner root:pducontrol, group-readable) |
+| Config | `/etc/pdu-control/config.json` (640 root:pducontrol) |
+| Secrets | `/etc/pdu-control/secrets.env` (640 root:pducontrol, 9 B64 vars) |
+| Audit log | `/var/log/pdu-control/audit.log` + `audit.log.jsonl` |
+| Runtime state | `/var/lib/pdu-control/` (idempotency.json, pending_reboot.json) |
+| TLS | `/etc/nginx/ssl/pdu-control.{crt,key}`, self-signed, valid to 2031-09-10 |
+| Firewall | nftables `pdu_filter` (22/80/443 from 10.0.20.0/24 + 10.0.10.0/24 only) |
+| Logs | journald (`journalctl -u pdu-control`) + nginx `/var/log/nginx/` |
 
 ## 2. What operators use the PDU Manager for
 
@@ -57,24 +71,32 @@ If the UI shows older JetKVM/KYY/HDMI-splitter wording, compare the live configu
 
 ## 6. Restart versus VM reboot
 
-A normal PDU Manager application change should normally require only its application service/container to restart.
+A normal PDU Manager application change should normally require only its application service to restart.
 
 **Do not default to rebooting VM154.**
 
-After the source capture, replace the placeholders below with exact commands:
+Exact commands (captured from the live VM):
 
 ```bash
 # Status
-<exact service status command>
+systemctl status pdu-control --no-pager
 
-# Restart application only
-<exact service restart command>
+# Restart application only (service-level, no VM reboot)
+systemctl restart pdu-control
 
 # Logs
-<exact log command/path>
+journalctl -u pdu-control -f          # follow
+journalctl -u pdu-control -n 200      # recent
+
+# nginx (proxy) — restart only if proxy config changed
+systemctl reload nginx
+
+# Verify after restart (read-only)
+curl -sk https://10.0.20.154/health
+curl -sk -o /dev/null -w '%{http_code}\n' https://10.0.20.154/   # expect 302
 ```
 
-If the application cannot be restarted without a VM reboot, document why as technical debt and investigate a normal service lifecycle.
+The service auto-starts on boot (`WantedBy=multi-user.target`, enabled) and self-heals via `Restart=always` / `RestartSec=5`. Startup reconciliation of a pending self-host reboot (153:9) runs automatically in a daemon thread (`reconcile_pending_reboot`).
 
 ## 7. Troubleshooting checklist
 
@@ -111,18 +133,40 @@ If the application cannot be restarted without a VM reboot, document why as tech
 
 ## 8. Configuration backup/restore
 
-The current UI has exposed save/upload configuration controls. During source capture, document:
+**Verified live implementation:**
 
-- exact file format;
-- where the live configuration is stored;
-- which fields are mutable;
-- whether secrets are included;
-- validation performed during import;
-- backup/restore procedure;
-- compatibility rules across releases.
+The dashboard exposes **SAVE CONFIG (.md)** / **UPLOAD CONFIG (.md)**. The format is a Markdown batch-selection file, schema version 1:
 
-Do not assume the export is safe to commit until it has been inspected for secrets.
+- `<!-- PDU_BATCH_ACTION=on|off|reboot -->` — the intended action for the selection;
+- `<!-- PDU_BATCH_ITEM=<order>|<ip>|<outlet> -->` — one comment per selected outlet;
+- human-readable tables (order/pdu/ip/outlet/label) + full PDU inventory for review.
+
+Behavior (verified in `app/app.py`):
+
+- **Export** (`POST /configuration/export`): validates items with action `on` so protected outlets can be saved without implying permission; returns `pdu-master-control-<timestamp>.md` attachment. Contains NO secrets (only asset IDs, IPs, labels).
+- **Upload** (`POST /configuration/upload`): accepts `.md/.markdown/.txt` ≤ 1 MB; parses machine-readable comments; validates each target against live config; **rejects OFF/REBOOT selections on protected outlets at upload time**; returns the parsed selection — never executes anything.
+- Execution requires an explicit **SEND TO SELECTED** click, which routes through the shared action service (protection re-checked at execution time).
+
+Live site configuration (outlet labels, protection, PDU inventory) itself lives in `/etc/pdu-control/config.json` — backed up outside the app tree. To back it up manually:
+
+```bash
+# on VM154 (root)
+cp -a /etc/pdu-control/config.json /var/backups/pdu-control-config-$(date +%Y%m%d-%H%M%S).json
+```
+
+The authoritative asset/outlet mapping source is Jordan's `Server_Architecture` xlsx (reflected in `/etc/pdu-control/ARCHITECTURE.md`, rev 2026-09-06, also captured at `docs/vm-docs/ARCHITECTURE-notes-2026-09-06.md`).
 
 ## 9. Agent operating rule
 
 An AI agent working on this project may perform read-only inspection and software validation, but it must not actuate real outlets unless a human explicitly authorizes the exact production action for the session.
+
+## 10. AI/API access (for agents)
+
+The service exposes `/api/v1` for programmatic use — full guide in `docs/vm-docs/API.md` (captured from the VM). Summary:
+
+- HTTP Basic with LLDAP credentials; TLS cert self-signed (pin sha256 `137308d592260184fd75b7a555e27f61332a8c7ffe5feb1f58d1c5553b2221a9` or use `curl --cacert`).
+- One UUID `Idempotency-Key` per intended action; never retry with a NEW id on timeout (replay semantics: same id replays the original job; new id = new power event).
+- Rate limits: 120 GET/min, 20 POST/min per identity (429 + Retry-After).
+- `GET /me` → permissions; `GET /pdus` → inventory + busy state; `GET /jobs/{id}` → job status.
+
+The agent test account `miam_0154_pdu_agent` (pdu-ai-agent + pdu-operator) exists for smoke tests; protected-outlet override was exercised once and REVOKED (revocation verified end-to-end).
