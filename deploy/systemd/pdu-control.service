@@ -1,0 +1,19 @@
+[Unit]
+Description=MIAM Rack PDU Control Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pducontrol
+Group=pducontrol
+WorkingDirectory=/opt/pdu-control
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/pdu-control/venv/bin/gunicorn --workers 1 --threads 4 --bind 127.0.0.1:5000 --timeout 120 --access-logfile - --error-logfile - app:app
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

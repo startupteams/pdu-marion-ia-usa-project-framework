@@ -1,0 +1,94 @@
+{
+  "architecture_revision": "2026-09-06",
+  "control_host": {
+    "asset_id": "MIAM-00133",
+    "ip": "10.0.20.133",
+    "mac": "20:88:10:df:5f:29",
+    "role": "Proxmox node hosting VM 154",
+    "off_reboot_protected": true
+  },
+  "vm": {
+    "vmid": 154,
+    "name": "pdu-control",
+    "ip": "10.0.20.154",
+    "gateway": "10.0.20.1"
+  },
+  "pdus": [
+    {
+      "name": "TripLite Power Distribution Unit MV30HVNet - GPU Server #111 & #143",
+      "asset_id": "MIAM-00151",
+      "ip": "10.0.20.151",
+      "mac": "00:06:67:26:84:3f",
+      "ethernet_switch_asset_id": "MIAM-00120",
+      "ethernet_switch_port": 21,
+      "outlets": 24,
+      "protected": [],
+      "labels": {
+        "1": "MIAM-00167 - Power GPU 1,3,4 - EVGA Supernova 1600 T2 (MIAM-00143)",
+        "2": "MIAM-00166 - Power MoBo & GPU 5,6,7 - EVGA Supernova 1600 T2 (MIAM-00143)",
+        "3": "MIAM-00110 - Dell 7010 Optiplex with KVM",
+        "7": "MIAM-00117 - Dell 7010 Optiplex",
+        "8": "MIAM-00118 - Dell 7010 Optiplex",
+        "9": "MIAM-00119 - Dell 7010 Optiplex",
+        "13": "MIAM-00163 - Power GPU 1,3,4 - EVGA Supernova 1600 T2 (MIAM-00111)",
+        "14": "MIAM-00162 - Power MoBo & GPU 5,6,7 - EVGA Supernova 1600 T2 (MIAM-00111)"
+      }
+    },
+    {
+      "name": "TripLite Power Distribution Unit MV30HVNet - GPU Server #112 & #144",
+      "asset_id": "MIAM-00152",
+      "ip": "10.0.20.152",
+      "mac": "00:06:67:24:e7:ea",
+      "ethernet_switch_asset_id": "MIAM-00120",
+      "ethernet_switch_port": 22,
+      "outlets": 24,
+      "protected": [],
+      "labels": {
+        "1": "MIAM-00169 - Power GPU 1,3,4 - EVGA Supernova 1600 T2 (MIAM-00144)",
+        "2": "MIAM-00168 - Power MoBo & GPU 5,6,7 - EVGA Supernova 1600 T2 (MIAM-00144)",
+        "3": "MIAM-00135",
+        "4": "MIAM-00114",
+        "5": "MIAM-00115",
+        "6": "MIAM-00113",
+        "15": "MIAM-00165 - Power GPU 1,3,4 - be quiet! Dark Power 13 (MIAM-00112)",
+        "16": "MIAM-00164 - Power MoBo & GPU 5,6,7 - be quiet! Dark Power 13 (MIAM-00112)"
+      }
+    },
+    {
+      "name": "TripLite Power Distribution Unit MV30HVNet - Networking",
+      "asset_id": "MIAM-00153",
+      "ip": "10.0.20.153",
+      "mac": "00:06:67:24:e7:f4",
+      "ethernet_switch_asset_id": "MIAM-00120",
+      "ethernet_switch_port": 23,
+      "outlets": 24,
+      "protected": [
+        3,
+        4,
+        5,
+        6,
+        9
+      ],
+      "labels": {
+        "3": "MIAM-00116 - OPNsense Firewall",
+        "4": "MIAM-00170 - 2.5G Network Switch",
+        "5": "MIAM-00171 - 10G Network Switch",
+        "6": "MIAM-00120 - 1G Network Switch",
+        "7": "MIAM-00147 - NUC 11 Pro",
+        "8": "MIAM-00148 - OWC ThunderBay 8 / Thunderbolt 3 Docking Station (MIAM-00147)",
+        "9": "MIAM-00133 - Dell 7010 / Proxmox / Tailscale routing",
+        "10": "MIAM-00149 - Minisforum Unified Memory",
+        "11": "MIAM-00100 - Minisforum MS-01",
+        "12": "MIAM-00172 - JetKVM",
+        "15": "MIAM-00176 - Backup Fans for Servers 1,2,3,4",
+        "16": "MIAM-00175 - Fan for Middle rack 10G & 2.5G Switch, MIAM-00147 and MIAM-00149",
+        "17": "MIAM-00177 - 45W 7-port USB hub for Wyze cameras and Layla Noise Sensor",
+        "18": "MIAM-00180 - 2000W 240V to 120V Inverter / Air Purifier",
+        "19": "MIAM-00178 - Rugged LACIE 8TB power supply",
+        "20": "MIAM-00179 - USB 3.1 hub for MIAM-00100 and Rugged LACIE drives",
+        "23": "MIAM-00174 - Fan for Top rack all Dell 7010s, Firewall, 1G Switch, DAS and MIAM-00100",
+        "24": "MIAM-00173 - KYY 1080p monitor / JetKVM / KVM HDMI splitter"
+      }
+    }
+  ]
+}
