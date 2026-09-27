@@ -52,10 +52,15 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 current_mode() {
-  if [[ -f "$DROPIN" ]]; then
-    grep -oP 'Environment=PDU_BACKEND=\K\w+' "$DROPIN" 2>/dev/null || echo "unknown"
+  # Scan ALL drop-ins for PDU_BACKEND (staging installs may have used other
+  # drop-in filenames, e.g. mock-backend.conf). Last match wins; the app's
+  # default when nothing sets the var is "real".
+  local found
+  found="$(grep -rhoP 'Environment=PDU_BACKEND=\K\w+' "$DROPIN_DIR" 2>/dev/null | tail -1)"
+  if [[ -n "$found" ]]; then
+    echo "$found"
   else
-    echo "real"   # app default when no drop-in exists
+    echo "real"   # app default when no drop-in sets PDU_BACKEND
   fi
 }
 
@@ -103,6 +108,15 @@ if [[ "$MODE" == "real" ]]; then
 fi
 
 mkdir -p "$DROPIN_DIR"
+# Remove any OTHER drop-in that sets PDU_BACKEND (e.g. legacy staging
+# mock-backend.conf from install.sh) — systemd applies drop-ins in filename
+# order and the LAST one would silently win.
+for other in "$DROPIN_DIR"/*.conf; do
+  if [[ -f "$other" && "$other" != "$DROPIN" ]] && grep -q "PDU_BACKEND" "$other" 2>/dev/null; then
+    rm -f "$other"
+    echo "  removed legacy drop-in: $(basename "$other")"
+  fi
+done
 cat > "$DROPIN" <<EOF
 # Managed by deploy/set-backend-mode.sh (FW-003/FW-004). Manual edits will be
 # overwritten by the next mode switch; use the script, not this file.

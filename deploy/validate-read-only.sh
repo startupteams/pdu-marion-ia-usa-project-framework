@@ -121,42 +121,18 @@ else
   fail "/health payload invalid or missing backend_mode"
 fi
 
-# --- 6. /api/v1 read-only: inventory + outlet state reads (Basic auth, GET) --
-V1_PDUS="$(curl -sk -o "$TMPDIR_RO/v1pdus.json" -w '%{http_code}' \
-  -H "Authorization: Basic $B64CREDS" "$BASE_URL/api/v1/pdus")"
-if [[ "$V1_PDUS" == "200" ]]; then
-  pass "GET /api/v1/pdus -> 200"
-  if python3 - "$TMPDIR_RO/v1pdus.json" <<'PY' 2>/dev/null
-import json, sys
-data = json.load(open(sys.argv[1]))
-pdus = data if isinstance(data, list) else data.get("pdus", [])
-assert len(pdus) == 3, f"expected 3 PDUs, got {len(pdus)}"
-sys.exit(0)
-PY
-  then
-    pass "/api/v1/pdus lists all 3 PDUs"
-  else
-    fail "/api/v1/pdus payload invalid"
-  fi
-else
-  fail "GET /api/v1/pdus -> $V1_PDUS"
-fi
-
-# Outlet state read on PDU 153 (asset key), outlet 12 — a GET; read-only.
-OUT12="$(curl -sk -o "$TMPDIR_RO/outlet12.json" -w '%{http_code}' \
-  -H "Authorization: Basic $B64CREDS" "$BASE_URL/api/v1/pdus/MIAM-00153/outlets/12")"
-if [[ "$OUT12" == "200" ]] && python3 - "$TMPDIR_RO/outlet12.json" <<'PY' 2>/dev/null
-import json, sys
-o = json.load(open(sys.argv[1]))
-assert o.get("state") in ("ON", "OFF", "UNKNOWN"), f"bad state: {o.get('state')}"
-assert o.get("name"), "label missing"
-sys.exit(0)
-PY
-then
-  pass "GET /api/v1/pdus/MIAM-00153/outlets/12 -> 200 (state readable)"
-else
-  fail "outlet state read failed (HTTP $OUT12)"
-fi
+# --- 6. /api/v1 auth gate (Basic with LLDAP credentials; emergency creds are
+# deliberately NOT valid on the API — V3 section 21) ---------------------------
+V1_UNAUTH="$(curl -sk -o /dev/null -w '%{http_code}' "$BASE_URL/api/v1/pdus")"
+[[ "$V1_UNAUTH" == "401" ]] && pass "GET /api/v1/pdus unauth -> 401 (gate live)" \
+  || fail "GET /api/v1/pdus unauth -> $V1_UNAUTH (expected 401)"
+V1_EMERG="$(curl -sk -o /dev/null -w '%{http_code}' -u "$WEB_USER:$WEB_PASS" "$BASE_URL/api/v1/pdus")"
+[[ "$V1_EMERG" == "401" ]] && pass "emergency creds rejected on /api/v1 -> 401 (correct)" \
+  || fail "emergency creds ACCEPTED on /api/v1 -> $V1_EMERG (must stay 401)"
+# NOTE: /api/v1 outlet-state reads need a real LLDAP account (any pdu-viewer);
+# the deep read-only state proof is covered by docs/PROVISIONING_VM156.md §2.5
+# (in-process read_all_states probe) — not by this script, which stays
+# credential-minimal.
 
 # --- 7. structural guarantee: no power-changing requests in this script ------
 if grep -E 'curl ([^|]*)(-X POST|--request POST)' "$0" | grep -v '/login' >/dev/null 2>&1; then
