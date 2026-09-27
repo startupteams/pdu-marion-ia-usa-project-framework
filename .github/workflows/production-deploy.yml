@@ -46,12 +46,15 @@ jobs:
         id: resolve
         run: |
           SHA="$(git rev-parse HEAD)"
-          case "$(git branch -r --contains "$SHA" 2>/dev/null)" in
-            *origin/main*) : ;;
-            *) echo "FATAL: $SHA is not on main" >&2; exit 2 ;;
-          esac
+          # checkout of a single SHA has no remote refs — verify against ls-remote instead
+          git remote add origin-check "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" 2>/dev/null || true
+          MAIN_HEAD="$(git ls-remote origin-check refs/heads/main | awk '{print $1}')"
+          if [ "$SHA" != "$MAIN_HEAD" ]; then
+            echo "FATAL: $SHA is not main tip (main = $MAIN_HEAD)" >&2
+            exit 2
+          fi
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-          echo "Deploy target: $SHA (verified on main)"
+          echo "Deploy target: $SHA (verified = main tip)"
 
       - name: Build release artifact
         run: ./deploy/build-release.sh "${{ steps.resolve.outputs.sha }}"
