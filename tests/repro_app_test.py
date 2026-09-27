@@ -3,7 +3,7 @@
 import base64, builtins, json, os, sys, tempfile, threading, time, shutil
 from pathlib import Path
 
-ROOT = Path("/home/jordatech/work/pdu-marion-ia-usa-project-framework")
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "app"))
 
 tmp = Path(tempfile.mkdtemp(prefix="pdu-repro-"))
