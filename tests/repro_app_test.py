@@ -64,4 +64,6 @@ for name, code, passed in checks:
     print(("PASS" if passed else "FAIL"), name, "->", code)
     ok = ok and passed
 print("REPRO_RESULT:", "PASS" if ok else "FAIL")
-sys.exit(0 if ok else 1)
+
+if __name__ == "__main__":
+    sys.exit(0 if ok else 1)

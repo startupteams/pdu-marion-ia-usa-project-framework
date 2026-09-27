@@ -28,7 +28,13 @@ import uuid
 from collections import defaultdict
 from pathlib import Path
 
-import pdu_ssh_direct as pdu_direct
+# Backend selection: PDU_BACKEND=mock (CI/staging) swaps the state-read and
+# control paths to the in-repo mock driver. In mock mode the real SSH driver
+# is never imported, so no hardware can be reached at all (REQ-010).
+if os.environ.get("PDU_BACKEND", "").lower() == "mock":
+    import mock_pdu_backend as pdu_direct
+else:
+    import pdu_ssh_direct as pdu_direct
 
 CONFIG_FILE = "/etc/pdu-control/config.json"
 SECRETS_FILE = "/etc/pdu-control/secrets.env"

@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
-import json
-import sys
+"""CLI wrapper the app subprocess-spawns for power operations.
 
-import pdu_ssh_direct
+Backend selection: PDU_BACKEND=mock routes to the in-repo mock driver
+(CI/staging; never touches hardware). Default = real PowerAlert SSH driver.
+"""
+import json
+import os
+import sys
 
 
 def main():
@@ -13,8 +17,13 @@ def main():
     outlet = int(sys.argv[2])
     action = sys.argv[3].lower()
 
+    if os.environ.get("PDU_BACKEND", "").lower() == "mock":
+        import mock_pdu_backend as backend
+    else:
+        import pdu_ssh_direct as backend
+
     try:
-        final_state = pdu_ssh_direct.control(ip, outlet, action)
+        final_state = backend.control(ip, outlet, action)
         print(json.dumps({"ok": True, "final_state": final_state}))
     except Exception as exc:
         print(json.dumps({"ok": False, "error": str(exc)}))
