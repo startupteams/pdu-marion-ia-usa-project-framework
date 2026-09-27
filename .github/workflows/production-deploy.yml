@@ -1,0 +1,113 @@
+name: Production Deploy
+
+# FW-009/FW-010 (Future Work v2): production deployment to VM156.
+#
+# Flow: workflow_dispatch → 'production' environment approval (required reviewer:
+# jordatech) → artifact integrity verification → deploy via self-hosted runner
+# (ADR-0005) when available, otherwise emit the authorized runbook command.
+#
+# HARD SAFETY RULES (Future Work v2 §14):
+# - deploys ONLY code from main (dispatch requires a ref on main; environment
+#   branch policy restricts to protected branches)
+# - validation is NON-ACTUATING: health checks + read-only endpoint asserts only
+# - the workflow never touches PDU credentials and never sends ON/OFF/REBOOT
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Git SHA on main to deploy (defaults to main tip)"
+        required: false
+        default: ""
+      dry_run:
+        description: "Verify only — no deploy (mock-mode smoke of the pipeline)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  verify-artifact:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.ref }}
+
+      - name: Resolve deploy SHA
+        id: resolve
+        run: |
+          SHA="$(git rev-parse HEAD)"
+          case "$(git branch -r --contains "$SHA" 2>/dev/null)" in
+            *origin/main*) : ;;
+            *) echo "FATAL: $SHA is not on main" >&2; exit 2 ;;
+          esac
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Deploy target: $SHA (verified on main)"
+
+      - name: Build release artifact
+        run: ./deploy/build-release.sh "${{ steps.resolve.outputs.sha }}"
+
+      - name: Upload artifact for deploy job
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdu-manager-${{ steps.resolve.outputs.sha }}
+          path: |
+            dist/pdu-manager-${{ steps.resolve.outputs.sha }}.tar.gz
+            dist/pdu-manager-${{ steps.resolve.outputs.sha }}.sha256
+          retention-days: 14
+
+  deploy:
+    needs: verify-artifact
+    runs-on: ${{ vars.PDU_DEPLOY_RUNNER_LABEL || 'ubuntu-latest' }}
+    environment: production
+    steps:
+      - name: Download verified artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pdu-manager-${{ needs.verify-artifact.outputs.sha }}
+
+      - name: Verify checksum
+        run: |
+          SHA="${{ needs.verify-artifact.outputs.sha }}"
+          EXPECT="$(awk '{print $1}' "pdu-manager-$SHA.sha256")"
+          ACTUAL="$(sha256sum "pdu-manager-$SHA.tar.gz" | awk '{print $1}')"
+          if [ "$EXPECT" != "$ACTUAL" ]; then
+            echo "FATAL: checksum mismatch" >&2; exit 2
+          fi
+          echo "checksum verified: $ACTUAL"
+
+      - name: Deploy to VM156 (transactional, non-actuating)
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          SHA="${{ needs.verify-artifact.outputs.sha }}"
+          if [ -z "${PDU_DEPLOY_SSH_KEY:-}" ]; then
+            echo "NO_RUNNER_ACCESS: this GitHub-hosted job cannot reach VM156."
+            echo "Deploy via the authorized agent path (docs/PROVISIONING_VM156.md / deploy/deploy-release.sh)"
+            echo "with artifact pdu-manager-$SHA.tar.gz (checksum verified above)."
+            exit 3
+          fi
+          # self-hosted-runner path (ADR-0005): key + host configured as runner vars/secrets
+          install -m 600 /dev/null deploy_key
+          echo "$PDU_DEPLOY_SSH_KEY" > deploy_key
+          scp -i deploy_key -o StrictHostKeyChecking=accept-new "pdu-manager-$SHA.tar.gz" "pdu-runner@${PDU_DEPLOY_HOST:-10.0.20.156}:/tmp/"
+          ssh -i deploy_key "pdu-runner@${PDU_DEPLOY_HOST:-10.0.20.156}" \
+            "sudo /opt/pdu-control/current/deploy/deploy-release.sh /tmp/pdu-manager-$SHA.tar.gz"
+        env:
+          PDU_DEPLOY_SSH_KEY: ${{ secrets.PDU_DEPLOY_SSH_KEY }}
+          PDU_DEPLOY_HOST: ${{ vars.PDU_DEPLOY_HOST }}
+
+      - name: Post-deploy read-only validation (no actuation)
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          echo "Post-deploy validation is executed on-box by deploy-release.sh's"
+          echo "health gate (non-actuating). Outlet state is never changed by"
+          echo "deployment validation (Future Work v2 §14.3)."
