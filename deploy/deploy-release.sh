@@ -118,6 +118,12 @@ rm -f "$pip_install_log"
 
 echo "== [6/8] validate config (no service start yet) =="
 python3 -c "import json; json.load(open('$ETC_DIR/config.json'))" || rollback "config-validate"
+# FW-018: full schema validation (protection-to-asset consistency, ranges, dups)
+if [[ -f "$PAYLOAD/deploy/validate-config.py" ]]; then
+  python3 "$PAYLOAD/deploy/validate-config.py" "$ETC_DIR/config.json" || rollback "config-schema-validate"
+else
+  echo "WARN: validate-config.py not in payload — JSON-parse-only validation performed"
+fi
 
 echo "== [7/8] switch code into live tree + restart service =="
 if [[ -d "$OPT_DIR/releases/$RELEASE_SHA/app" ]]; then

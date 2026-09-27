@@ -170,3 +170,14 @@ The service exposes `/api/v1` for programmatic use — full guide in `docs/vm-do
 - `GET /me` → permissions; `GET /pdus` → inventory + busy state; `GET /jobs/{id}` → job status.
 
 The agent test account `miam_0154_pdu_agent` (pdu-ai-agent + pdu-operator) exists for smoke tests; protected-outlet override was exercised once and REVOKED (revocation verified end-to-end).
+
+## 11. Audit log rotation (FW-015)
+
+The repo ships `deploy/logrotate/pdu-control` (weekly, keep 12 archives, compress, copytruncate — conservative until a formal retention period is chosen). Install on a target VM:
+
+```bash
+sudo cp /opt/pdu-control/current/deploy/logrotate/pdu-control /etc/logrotate.d/pdu-control
+sudo logrotate -d /etc/logrotate.d/pdu-control   # dry-run check
+```
+
+Rotation covers both `/var/log/pdu-control/audit.log` and `audit.log.jsonl`. `copytruncate` is used so the running service never needs a reopen signal.

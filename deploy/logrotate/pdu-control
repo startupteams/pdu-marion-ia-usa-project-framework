@@ -1,0 +1,17 @@
+# /etc/logrotate.d/pdu-control — audit log rotation (FW-015)
+# Install: sudo cp deploy/logrotate/pdu-control /etc/logrotate.d/pdu-control
+#
+# Retention policy: 12 rotated archives (weekly). Future Work v2 leaves the
+# formal retention period TBD (§FW-015); weekly + 12 weeks is conservative —
+# no aggressive deletion. Adjust when Jordan picks a policy.
+/var/log/pdu-control/audit.log /var/log/pdu-control/audit.log.jsonl {
+    weekly
+    rotate 12
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    create 0640 pducontrol pducontrol
+    su root pducontrol
+}

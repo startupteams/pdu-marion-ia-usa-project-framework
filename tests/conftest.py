@@ -28,10 +28,9 @@ shutil.copy(REPO_ROOT / "config" / "examples" / "config.example.json", _config)
 _b64 = lambda s: base64.b64encode(s.encode()).decode()
 _secrets.write_text(
     "PDU_USER_B64=%s\nPDU_PASS_B64=%s\n"
-    "SNMP_VERSION_B64=%s\nSNMP_RO_B64=%s\nSNMP_RW_B64=%s\n"
     "WEB_USER_B64=%s\nWEB_PASS_B64=%s\n"
     "LDAP_SERVICE_USER_B64=%s\nLDAP_SERVICE_PASS_B64=%s\n"
-    % (_b64("testuser"), _b64("testpass"), _b64("2c"), _b64("ro"), _b64("rw"),
+    % (_b64("testuser"), _b64("testpass"),
        _b64("root"), _b64("test-emergency"), _b64("svc"), _b64("svcpass"))
 )
 
