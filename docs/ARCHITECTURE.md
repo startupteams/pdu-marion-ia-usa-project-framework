@@ -108,16 +108,26 @@ The exact application framework, reverse proxy, process manager, data format, an
 
 ## 5. Building Block View
 
-| Building Block | Responsibility | Interfaces / Dependencies | Code Location |
+The live implementation was captured from VM154 on 2026-09-27 (see `CAPTURE_MANIFEST.md`). All modules below are **Implemented and verified** — they were derived from the running systemd unit and committed to `app/`.
+
+| Building Block | Responsibility | Code Location (repo) | Live path on VM154 |
 |---|---|---|---|
-| Web UI | Display PDUs/outlets/state/protection and accept deliberate operator actions | Browser, application backend | **To be captured** |
-| Application controller | Validate requests, enforce protection, coordinate backend operations, produce action results | Web UI, PDU adapter, config, auth, logs | **To be captured** |
-| PDU adapter | Read outlet state and issue explicitly authorized power operations | Managed PDUs | **To be captured** |
-| Authentication integration | Authenticate operators | LLDAP/other current mechanism | **To be captured** |
-| Configuration layer | PDU inventory, outlet labels, presets, protection settings, safe defaults | Persistent config | **To be captured** |
-| Action log | Record operational actions/results without secrets | Application/runtime log store | **To be captured** |
-| Deployment package | Install/start/restart/rollback application reproducibly | OS/systemd/container runtime | Target; not yet complete |
-| CI/CD workflows | Validate source and deliver reviewed releases | GitHub Actions + approved runner | Target; not yet implemented |
+| Web UI + legacy API | Login (LLDAP session + emergency-local), dashboard (outlet grid, batch, presets, .md config save/upload), legacy /api routes routed through the action service | `app/app.py` (1,636 lines; HTML/CSS/JS inline via `render_template_string`; 21 routes) | `/opt/pdu-control/app.py` |
+| Runtime core | Per-PDU busy locks, worker subprocess, state cache, structured audit, waiting-for-lock queue, protected-recovery-ON, self-host (153:9) pending-marker + startup reconcile | `app/app_runtime.py` | `/opt/pdu-control/app_runtime.py` |
+| Action service | Single shared action path: authorization, hard protected-outlet invariant, idempotency (request_id replay, 24h), error model | `app/action_service.py` | `/opt/pdu-control/action_service.py` |
+| API v1 blueprint | `/api/v1` health/me/pdus/outlets/actions/batch/jobs/audit; HTTP Basic (LLDAP); rate limit 120 GET / 20 POST per minute per identity | `app/api_v1.py` | `/opt/pdu-control/api_v1.py` |
+| Authentication integration | LLDAP bind-check (`uid=<user>,ou=people,dc=example,dc=com` @ 10.0.20.101:3890, plain LDAP), `member=` group search (60s TTL cache), Actor role model | `app/auth_lldap.py` | `/opt/pdu-control/auth_lldap.py` |
+| PDU adapter | pexpect SSH → PowerAlert menu driver (port 22, legacy algos ssh-rsa/CBC); `1 Devices → 5 Loads → 1 Configuration → outlet`; ON/OFF menu 3 + `y`; REBOOT/CYCLE menu 4 native Cycle Load; verify via fresh session | `app/pdu_ssh_direct.py` | `/opt/pdu-control/pdu_ssh_direct.py` |
+| Worker CLI | App-spawned subprocess wrapper around the driver (`pdu_worker.py <ip> <outlet> <action>`) | `app/pdu_worker.py` | `/opt/pdu-control/pdu_worker.py` |
+| Legacy monolith | Pre-V3 monolith, **not imported** by the live app; kept for archaeology | `app/legacy_app_direct.py` | `/opt/pdu-control/app_direct.py` |
+| Configuration | JSON: 3 PDUs (asset_id, ip, mac, labels, protected), control_host, vm block | `config/examples/config.example.json` | `/etc/pdu-control/config.json` (640 root:pducontrol) |
+| Secrets | 9 B64 vars (PDU_USER/PASS, SNMP_VERSION/RO/RW — SNMP unused by live code, WEB_USER/PASS, LDAP_SERVICE_USER/PASS) | `deploy/examples/secrets.env.example` (placeholders) | `/etc/pdu-control/secrets.env` (640 root:pducontrol) |
+| Action log | `audit.log` (key=value) + `audit.log.jsonl` (structured); no rotation configured | — (state, not in Git) | `/var/log/pdu-control/` |
+| Idempotency store | request_id → job_ids map, 24h retention | — (state, not in Git) | `/var/lib/pdu-control/idempotency.json` |
+| TLS termination | nginx site: :80 → 301 :443; :443 → 127.0.0.1:5000; TLSv1.2/1.3 | `deploy/proxy/nginx-pdu-control.conf` | `/etc/nginx/sites-available/pdu-control` |
+| Firewall | nftables `inet pdu_filter`: allow 22/80/443 from 10.0.20.0/24 + 10.0.10.0/24; drop 80/443 otherwise | `deploy/nftables.conf` | `/etc/nftables.conf` |
+| Service unit | systemd simple service, user pducontrol, Restart=always/5s, logs → journald | `deploy/systemd/pdu-control.service` | `/etc/systemd/system/pdu-control.service` |
+| Historical bootstrap | V1-era installer (writes config + venv + old unit binding 0.0.0.0:5000); provenance only, NOT the current install method | `deploy/scripts/pdu-control-bootstrap.sh` | `/root/pdu-control-bootstrap.sh` |
 
 ## 6. Runtime View
 
@@ -176,15 +186,31 @@ Automated tests exercise this flow against a mock backend, not real PDUs.
 ```mermaid
 flowchart TB
     Host[Proxmox MIAM-00133]
-    VM[VM154\nPDU Manager\n10.0.20.154]
+    VM[VM154 pdu-control\\nDebian 12 / Python 3.11 venv\\ngunicorn 1w4t @ 127.0.0.1:5000]
+    Nginx[nginx 1.22.1\\nTLS :443 / :80 301]
+    Nft[nftables pdu_filter]
     Host --> VM
-    VM --> P151[10.0.20.151]
-    VM --> P152[10.0.20.152]
-    VM --> P153[10.0.20.153]
-    VM --> Auth[10.0.20.101\nLLDAP - verify integration]
+    Nginx --> VM
+    Nft --- Nginx
+    VM --> P151[10.0.20.151\\nSSH PowerAlert]
+    VM --> P152[10.0.20.152\\nSSH PowerAlert]
+    VM --> P153[10.0.20.153\\nSSH PowerAlert\\nprotected 3,4,5,6,9]
+    VM --> Auth[10.0.20.101:3890\\nLLDAP - verified\\nplain LDAP bind]
 ```
 
-Exact OS/runtime/service/proxy/persistent paths are **Unknown / verify** until the live capture is complete.
+**Captured facts (2026-09-27, verified from live runtime):**
+
+- VM154 `pdu-control`: Debian 12 bookworm, kernel 6.1.0-53-cloud-amd64, 1 vCPU-class (2 assigned), 1 GiB RAM, 16 GiB disk, qemu-guest-agent active, timezone America/Chicago.
+- Service: systemd `pdu-control.service` (enabled, `Restart=always`, `RestartSec=5`, `User=pducontrol`, `WorkingDirectory=/opt/pdu-control`, logs to journald). ExecStart: `/opt/pdu-control/venv/bin/gunicorn --workers 1 --threads 4 --bind 127.0.0.1:5000 --timeout 120 --access-logfile - --error-logfile - app:app`.
+- Reverse proxy: nginx 1.22.1, site `/etc/nginx/sites-available/pdu-control`; TLS self-signed cert at `/etc/nginx/ssl/pdu-control.{crt,key}` (CN=10.0.20.154, SAN IP+DNS:pdu-control, valid 2026-09-11 → 2031-09-10, sha256 fingerprint `137308d592260184fd75b7a555e27f61332a8c7ffe5feb1f58d1c5553b2221a9`).
+- Firewall: nftables `inet pdu_filter` (enabled): SSH 22 + web 80/443 allowed from 10.0.20.0/24 and 10.0.10.0/24 only; 80/443 dropped otherwise.
+- App data: config `/etc/pdu-control/config.json` (640 root:pducontrol), secrets `/etc/pdu-control/secrets.env` (640 root:pducontrol, 9 B64 vars), audit `/var/log/pdu-control/audit.log{,.jsonl}`, idempotency `/var/lib/pdu-control/idempotency.json`, pending-reboot marker `/var/lib/pdu-control/pending_reboot.json`.
+- Auth: LLDAP at 10.0.20.101:3890 (plain LDAP, no TLS, base `dc=example,dc=com`); UI session auth (12h, HttpOnly, SameSite=Lax; Secure when `PDU_SECURE_COOKIES=1`) with emergency-local root fallback (web only, == pdu-admin); `/api/v1` HTTP Basic with LLDAP credentials; groups `pdu-viewer/pdu-operator/pdu-admin/pdu-ai-agent/pdu-ai-admin-override`.
+- Power backend: direct SSH to PDU :22 as user from `PDU_USER_B64`, PowerAlert menu navigation via pexpect; ON/OFF = menu 3 + `y`; REBOOT/CYCLE = menu 4 native Cycle Load (atomic, PDU-committed); every action verified through a fresh SSH session; per-PDU busy lock + 60 s command timeout; batch cap 72 outlets.
+- Protection: `MIAM-00153` outlets 3,4,5,6,9 protected (firewall, 2.5G, 10G, 1G switch, control host MIAM-00133). Protected OFF forbidden for EVERYONE (no override path exists in code). Protected REBOOT requires pdu-admin override + non-empty reason + `acknowledge_protected_device` (+ `acknowledge_controller_may_go_offline` for self-host 153:9). Unexpected OFF after protected cycle → recovery ON (2 attempts). Batch actions respect protection (all-or-nothing pre-dispatch checks).
+- An external monitor at `10.0.20.172` (services.miam.home.arpa) polls `/` + `/login` every ~5 min with python-requests — a downstream availability consumer exists.
+
+Exact OS/runtime/service/proxy/persistent paths **captured and verified** — see `CAPTURE_MANIFEST.md` and `docs/OPERATIONS.md` for exact commands.
 
 ### Target deployment
 
@@ -206,11 +232,11 @@ Runner placement and exact packaging method require an approved architecture dec
 
 ### Authentication / authorization
 
-Authentication is required for protected functions. LLDAP is part of the known environment, but exact live integration is to be verified. Authorization must not allow automated tests to bypass safety controls.
+**Verified live:** UI uses session login backed by LLDAP bind-check (`uid=<user>,ou=people,dc=example,dc=com` at `10.0.20.101:3890`, plain LDAP) plus an emergency-local root fallback (web UI only, treated as pdu-admin, audited with `auth_source=emergency-local`). `/api/v1` uses HTTP Basic with LLDAP credentials only (no local-root Basic). Authorization roles derive from LLDAP groups via `member=<userDN>` search (LLDAP has no memberOf): `pdu-viewer` (view), `pdu-operator` (control normal), `pdu-admin` (override protected reboot + administer), `pdu-ai-agent` + `pdu-ai-admin-override` (agent override path). Group results cache 60 s (revocation lands within TTL). Automated tests must not bypass safety controls; the hard protected-OFF invariant has no bypass flag at all.
 
 ### Secrets
 
-PDU credentials, LDAP bind passwords, session secrets, TLS private keys, and deployment credentials must remain outside Git.
+PDU credentials, LDAP bind passwords, session secrets, TLS private keys, and deployment credentials must remain outside Git. **Verified live model:** all credentials live in `/etc/pdu-control/secrets.env` (9 vars, base64-encoded, 640 root:pducontrol); the Flask session signing key is derived from the emergency credentials (`pdu-control-v3:{WEB_USER}:{WEB_PASS}` SHA-256), so rotating the emergency password rotates session signing; SNMP_* values are loaded but unused by the live modules (legacy compatibility). Repository side: `deploy/examples/secrets.env.example` holds placeholder names only.
 
 ### Safety
 
@@ -218,24 +244,22 @@ Power actuation is a consequential operation. Protection/lockout logic is a firs
 
 ### Configuration
 
-Mutable production configuration must survive application upgrades and rollbacks. KVM labels must preserve current approved names:
+Mutable production configuration must survive application upgrades and rollbacks. **Verified live:** mutable site configuration is `/etc/pdu-control/config.json`, stored OUTSIDE the application tree (`/opt/pdu-control`) — code releases cannot silently overwrite it. The UI's `.md` save/upload feature exports/imports batch selections (schema v1: `<!-- PDU_BATCH_ACTION=... -->` + `<!-- PDU_BATCH_ITEM=order|ip|outlet -->` machine-readable comments); upload validates structure and rejects protected outlets for OFF/REBOOT at upload time and never auto-executes.
 
-- `MIAM-00172 - JetKVM Hardware Console`
-- `MIAM-00182 - TESmart 16-Port HDMI KVM`
+KVM-related naming: the plan-era expectation was `MIAM-00172 - JetKVM Hardware Console` and `MIAM-00182 - TESmart 16-Port HDMI KVM`, but the **live configuration (rev 2026-09-06) uses** `MIAM-00172 - JetKVM` (outlet 153:12) and `MIAM-00173 - KYY 1080p monitor / JetKVM / KVM HDMI splitter` (outlet 153:24). The TESmart label exists only in `/root` backup copies, never in live config. Live state is the source of truth; do not reintroduce backup-only labels. REQ-003 wording needs human review against operator intent.
 
 ### Logging
 
-Operational actions and backend errors should be logged with enough context for troubleshooting without exposing secrets.
+**Verified live:** dual audit log at `/var/log/pdu-control/`: `audit.log` (human-readable key=value lines) and `audit.log.jsonl` (structured JSON). Records include ts, actor, source (ui/api/system), pdu/outlet/asset, action, override flag, reason, request_id, and outcome (`ACCEPTED` pre-transmission, then `SENT`/`SUCCESS` with `verified_state`, or `FAILED` with error). Login attempts are audited (success/failure/rejected-no-group). Backend errors surface with diagnostics. No log rotation is configured (technical debt — see CURRENT_STATE_AND_LIMITATIONS).
 
 ### Testing
 
-Testing layers should include:
+Current implemented test layers (in repo):
 
-- pure unit tests for policy/configuration parsing;
-- mock PDU adapter tests;
-- web integration tests;
-- clean staging deployment tests;
-- production read-only health checks.
+- `tests/test_capture.py` — 10 tests: module import integrity, protected-OFF hard invariant (including emergency-root bypass attempt), protected-reboot override ack chain, self-host outlet metadata, `.md` config roundtrip, upload protected rejection, action normalization. All run against fixtures with redirected paths; **no network, no SSH, no actuation**.
+- `tests/repro_app_test.py` — Flask test-client boot: health/login/auth-gates.
+
+Future layers (target): mock PDU adapter tests, staging deployment tests, production read-only health checks.
 
 ## 9. Architecture Decisions
 
@@ -261,16 +285,21 @@ Testing layers should include:
 
 | Risk | Impact | Mitigation / Next Step |
 |---|---|---|
-| Live code path is not yet formally captured | Wrong historical copy could be committed | Derive source path from running process/service before copying |
-| Secrets may be embedded in live files | Credential disclosure in Git | Secret review, externalization, scanning before commit |
-| CI could accidentally contact real hardware with privileged credentials | Outage | Mock/non-actuating backend; no production actuation credentials in PR CI |
-| Mutable config may be stored inside app tree | Deploy could overwrite outlet mapping/protection | Separate config/state before CD |
-| Current runtime dependencies may exist only as mutable VM state | Rebuild failure | Reconstruct/pin manifests and prove on clean staging VM |
+| ~~Live code path is not yet formally captured~~ | ~~Wrong historical copy could be committed~~ | **RESOLVED 2026-09-27** — captured from running systemd unit; see CAPTURE_MANIFEST.md |
+| ~~Secrets may be embedded in live files~~ | ~~Credential disclosure in Git~~ | **RESOLVED** — secrets live in external secrets.env (B64); capture scan clean; 1 doc credential redacted |
+| CI could accidentally contact real hardware with privileged credentials | Outage | Mock/non-actuating backend; no production actuation credentials in PR CI (tests run with redirected paths, no network) |
+| ~~Mutable config may be stored inside app tree~~ | ~~Deploy could overwrite outlet mapping/protection~~ | **RESOLVED** — live config at /etc/pdu-control, outside /opt/pdu-control app tree |
+| Runtime dependencies exist only as venv state on VM | Rebuild failure | requirements.txt reconstructed from live freeze; validate on clean staging VM (TDR-0001 remains open) |
 | Direct root/self-hosted runner on hypervisor would expand trust boundary | Cluster compromise risk | Dedicated least-privilege runner; human-approved ADR |
+| Audit log has no rotation | Disk growth on 16G VM | Add logrotate config in a future PR |
+| External monitor (10.0.20.172) depends on unauthenticated UI endpoints | Unavailable monitor after auth changes | Keep /login + /health reachable; coordinate before locking down |
 
 ### Technical Debt
 
-- [TDR-0001 - Production VM is not yet reproducible from GitHub](tdr/0001-production-vm-not-yet-reproducible-from-github.md)
+- [TDR-0001 - Production VM is not yet reproducible from GitHub](tdr/0001-production-vm-not-yet-reproducible-from-github.md) — app-level repro PROVEN (tests + Flask test client); full-VM staging repro still open.
+- Audit log rotation missing (discovered 2026-09-27).
+- `app_direct.py` legacy monolith retained (not imported); candidate for removal after parity sign-off.
+- SNMP_* secrets loaded but unused by live modules; cleanup candidate.
 
 ## 12. Glossary
 
