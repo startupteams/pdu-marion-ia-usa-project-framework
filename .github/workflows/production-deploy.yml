@@ -101,8 +101,8 @@ jobs:
           # self-hosted-runner path (ADR-0005): key + host configured as runner vars/secrets
           install -m 600 /dev/null deploy_key
           echo "$PDU_DEPLOY_SSH_KEY" > deploy_key
-          scp -i deploy_key -o StrictHostKeyChecking=accept-new "pdu-manager-$SHA.tar.gz" "pdu-runner@${PDU_DEPLOY_HOST:-10.0.20.156}:/tmp/"
-          ssh -i deploy_key "pdu-runner@${PDU_DEPLOY_HOST:-10.0.20.156}" \
+          scp -i deploy_key -o StrictHostKeyChecking=accept-new "pdu-manager-$SHA.tar.gz" "pdurunner@${PDU_DEPLOY_HOST:-10.0.20.156}:/tmp/"
+          ssh -i deploy_key "pdurunner@${PDU_DEPLOY_HOST:-10.0.20.156}" \
             "sudo /opt/pdu-control/current/deploy/deploy-release.sh /tmp/pdu-manager-$SHA.tar.gz"
         env:
           PDU_DEPLOY_SSH_KEY: ${{ secrets.PDU_DEPLOY_SSH_KEY }}
