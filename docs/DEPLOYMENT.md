@@ -4,7 +4,7 @@
 
 **Captured 2026-09-27 from VM154 (all verified live):**
 
-- Host: `MIAM-00133` · Guest: VM154 (`pdu-control`) · Endpoint: `https://10.0.20.154/`
+- Host: `MIAM-00133` · Guest: **VM156** (`pdu-control`; production since 2026-09-27) · Endpoint: `https://10.0.20.156/` · VM154 = powered-off fallback
 - VM OS: Debian 12 bookworm, kernel 6.1.0-53-cloud-amd64, 16 GiB disk, 1 GiB RAM, timezone America/Chicago, qemu-guest-agent active, sshd PasswordAuthentication=no
 - Application runtime: Python 3.11.2 venv at `/opt/pdu-control/venv`; Flask 3.1.3, gunicorn 26.1.0, pexpect 4.9.0, ldap3 2.9.1 (full freeze in `requirements.txt`)
 - Live source directory: `/opt/pdu-control` (modules owned root:pducontrol, group-readable)
@@ -156,9 +156,9 @@ python3 -c "import json; json.load(open('/etc/pdu-control/config.json'))"
 systemctl restart pdu-control
 
 # 6. Read-only health checks
-curl -sk https://10.0.20.154/health
-curl -sk -o /dev/null -w '%{http_code}\n' https://10.0.20.154/          # 302
-curl -sk -o /dev/null -w '%{http_code}\n' https://10.0.20.154/api/v1/health  # 200
+curl -sk https://10.0.20.156/health
+curl -sk -o /dev/null -w '%{http_code}\n' https://10.0.20.156/          # 302
+curl -sk -o /dev/null -w '%{http_code}\n' https://10.0.20.156/api/v1/health  # 200
 
 # 7. If failed, rollback
 #    (V3-era fallback: tarball restore from /root/pdu-control-backups/ + restart; CD-era: prior release + restart)

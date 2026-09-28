@@ -488,3 +488,11 @@ def audit_tail():
     except FileNotFoundError:
         lines = []
     return jsonify({"entries": [json.loads(l) for l in lines[-limit:]]})
+
+
+# ----------------------------------------------------------------------------
+# Asset-addressed API (REV4 §10C Phase 2) — registered after all raw routes
+# ----------------------------------------------------------------------------
+from api_assets import register_asset_routes
+
+register_asset_routes(api_v1, _current_actor_or_response, _request_id_from, _error_response)

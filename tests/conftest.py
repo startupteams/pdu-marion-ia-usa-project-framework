@@ -13,6 +13,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+# CI/tests NEVER touch the real driver (REQ-010): force the mock backend before any app import.
+os.environ.setdefault("PDU_BACKEND", "mock")
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 APP_DIR = REPO_ROOT / "app"
 sys.path.insert(0, str(APP_DIR))

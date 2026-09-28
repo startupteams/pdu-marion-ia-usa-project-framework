@@ -42,7 +42,7 @@ Operators use the web application to:
 
 ## 3. Normal operator workflow
 
-1. Open `https://10.0.20.154/`.
+1. Open `https://10.0.20.156/`.
 2. Authenticate if prompted.
 3. Identify the PDU and outlet by both outlet number and human-readable label.
 4. Use **Refresh States** before acting when current state matters.
@@ -94,8 +94,8 @@ journalctl -u pdu-control -n 200      # recent
 systemctl reload nginx
 
 # Verify after restart (read-only)
-curl -sk https://10.0.20.154/health
-curl -sk -o /dev/null -w '%{http_code}\n' https://10.0.20.154/   # expect 302
+curl -sk https://10.0.20.156/health
+curl -sk -o /dev/null -w '%{http_code}\n' https://10.0.20.156/   # expect 302
 ```
 
 The service auto-starts on boot (`WantedBy=multi-user.target`, enabled) and self-heals via `Restart=always` / `RestartSec=5`. Startup reconciliation of a pending self-host reboot (153:9) runs automatically in a daemon thread (`reconcile_pending_reboot`).
