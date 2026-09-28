@@ -283,7 +283,7 @@ def check_authorization(actor, action, targets, override, reason,
 
 def submit_action(actor, action, targets, reason="", admin_override=False,
                   acknowledge_protected=False, acknowledge_controller_may_go_offline=False,
-                  request_id=None, source="api"):
+                  request_id=None, source="api", correlation=None):
     """
     Single shared entry point (V3 plan section 23, Phase 2).
 
@@ -321,6 +321,22 @@ def submit_action(actor, action, targets, reason="", admin_override=False,
         f"request_id={request_id or '-'} source={source} result=ACCEPTED",
         source=source,
     )
+    # REV4 §10C Phase 6 — structured correlation record (JSONL): downstream services
+    # (ACMS Work → InfrastructureOperation → Server Manager op → PDU job → physical audit)
+    # correlate via these fields. correlation_id/source_service/upstream_operation_id are
+    # parsed from the tagged reason (asset-addressed path) or explicit kwargs.
+    rt.audit_write_structured({
+        "event": "action_submitted",
+        "action": action,
+        "actor": actor.username,
+        "auth": actor.auth_source,
+        "request_id": request_id or "-",
+        "targets": target_set,
+        "source": source,
+        "correlation_id": correlation.get("correlation_id"),
+        "source_service": correlation.get("source_service"),
+        "upstream_operation_id": correlation.get("upstream_operation_id"),
+    })
 
     # Per-PDU lock via the existing reserve path; jobs run the shared worker.
     try:
