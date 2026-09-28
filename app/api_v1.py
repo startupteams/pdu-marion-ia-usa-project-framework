@@ -343,6 +343,9 @@ def submit_outlet_action(pdu_key, outlet):
             acknowledge_controller_may_go_offline=bool(payload.get("acknowledge_controller_may_go_offline")),
             request_id=_request_id_from(),
             source="api",
+            correlation={k: payload.get(k) for k in
+                         ("correlation_id", "source_service", "upstream_operation_id")
+                         if payload.get(k)},
         )
     except ActionError as exc:
         return _error_response(exc)
@@ -648,19 +651,29 @@ def capabilities():
 @api_v1.get("/version")
 def version():
     """Release identity (Phase 5): Git SHA + build time from the release manifest."""
+    git_sha = "unknown"
+    build_time = "unknown"
     import json as _json
+    import os as _os
 
-    manifest = {}
-    for p in ("/opt/pdu-control/current/release_manifest.json",
-              "/opt/pdu-control/release_manifest.json"):
+    for p in ("/opt/pdu-control/current/release_manifest.json",):
         try:
-            manifest = _json.load(open(p))
+            m = _json.load(open(p))
+            git_sha = m.get("git_sha", git_sha)
+            build_time = m.get("build_time", build_time)
             break
         except (OSError, ValueError):
-            continue
+            pass
+    if git_sha == "unknown":
+        # releases-layout deployments carry the SHA in the current symlink target
+        try:
+            target = _os.path.realpath("/opt/pdu-control/current")
+            git_sha = _os.path.basename(target)[:40]
+        except OSError:
+            pass
     return jsonify({
         "api_version": API_VERSION,
-        "git_sha": manifest.get("git_sha", "unknown"),
-        "build_time": manifest.get("build_time", "unknown"),
+        "git_sha": git_sha,
+        "build_time": build_time,
         "backend_mode": rt.backend_mode(),
     })

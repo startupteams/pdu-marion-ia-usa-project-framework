@@ -146,6 +146,9 @@ def register_asset_routes(bp: Blueprint, actor_or_response, request_id_from, err
                 acknowledge_controller_may_go_offline=bool(payload.get("acknowledge_controller_may_go_offline")),
                 request_id=request_id_from(),
                 source="api",
+                correlation={k: payload.get(k) for k in
+                             ("correlation_id", "source_service", "upstream_operation_id")
+                             if payload.get(k)},
             )
         except ActionError as exc:
             return error_response(exc)
