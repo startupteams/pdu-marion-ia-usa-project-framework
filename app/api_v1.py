@@ -291,6 +291,11 @@ def _pdu_error(exc):
 # Action submission
 # ----------------------------------------------------------------------------
 
+def _pdu_asset_id(ip):
+    pdu = rt.find_pdu(ip) or {}
+    return pdu.get("asset_id", "")
+
+
 def _source_meta():
     return {
         "ip": request.remote_addr or "unknown",
@@ -310,6 +315,21 @@ def submit_outlet_action(pdu_key, outlet):
         return _error_response(action_service.err_unknown_pdu(pdu_key))
 
     payload = request.get_json(silent=True) or {}
+
+    # REV4 §10C Phase 3 — raw-route identity guard: machine callers SHOULD pass
+    # expected_asset_id; a mismatch fails BEFORE any driver dispatch (409).
+    expected = payload.get("expected_asset_id")
+    if expected:
+        target_asset = _pdu_asset_id(ip)
+        if target_asset and expected != target_asset:
+            resp = jsonify({"error": {
+                "code": "TARGET_IDENTITY_MISMATCH",
+                "message": f"expected_asset_id {expected!r} does not match the addressed "
+                           f"target {target_asset!r} (refused before any dispatch)",
+            }})
+            resp.status_code = 409
+            return resp
+
     try:
         action = action_service.normalize_action(payload.get("action"))
         target = action_service.validate_target(ip, outlet, action)
@@ -496,3 +516,151 @@ def audit_tail():
 from api_assets import register_asset_routes
 
 register_asset_routes(api_v1, _current_actor_or_response, _request_id_from, _error_response)
+
+
+# ----------------------------------------------------------------------------
+# REV4 §10C Phase 4 — action planning (dry-run, NEVER actuates) + Phase 5 caps
+# ----------------------------------------------------------------------------
+
+@api_v1.post("/action-plans")
+def action_plan():
+    """Dry-run an asset/outlet action: resolution + state + policy + authz.
+
+    Actuates nothing (no driver call, no job). Response carries
+    actuated=false and every field a caller needs to decide + pre-verify.
+    """
+    actor, failure = _current_actor_or_response()
+    if failure is not None:
+        return failure
+
+    payload = request.get_json(silent=True) or {}
+    asset_id = payload.get("asset_id")
+    pdu_key = payload.get("pdu")
+    outlet = payload.get("outlet")
+    action_raw = payload.get("action")
+
+    # resolve target (asset-addressed preferred)
+    if asset_id:
+        from api_assets import build_asset_index
+
+        try:
+            index = build_asset_index(rt.CONFIG["pdus"])
+        except ValueError as exc:
+            resp = jsonify({"error": {"code": "ASSET_MAPPING_AMBIGUOUS", "message": str(exc)}})
+            resp.status_code = 500
+            return resp
+        a = index.get(asset_id)
+        if a is None:
+            resp = jsonify({"error": {"code": "ASSET_UNKNOWN",
+                                      "message": f"no asset {asset_id!r}"}})
+            resp.status_code = 404
+            return resp
+        ip, outlet_n = a["pdu_ip"], a["outlet"]
+        label = a["label"]
+    elif pdu_key and outlet:
+        ip = _resolve_pdu(pdu_key)
+        if ip is None:
+            return _error_response(action_service.err_unknown_pdu(pdu_key))
+        outlet_n = int(outlet)
+        pdu = rt.find_pdu(ip)
+        label = rt.label_for(pdu, outlet_n)
+    else:
+        resp = jsonify({"error": {"code": "PLAN_TARGET_REQUIRED",
+                                  "message": "provide asset_id, or pdu + outlet"}})
+        resp.status_code = 422
+        return resp
+
+    try:
+        action = action_service.normalize_action(action_raw)
+    except ActionError as exc:
+        return _error_response(exc)
+
+    pdu = rt.find_pdu(ip)
+    protected = outlet_n in {int(v) for v in pdu.get("protected", [])}
+    # current state (read-only; PDU SSH read — the only network touch, never a control call)
+    try:
+        states = rt.read_states(ip)
+        state = (states.get(outlet_n, {}) or {}).get("state", "UNKNOWN")
+    except Exception as exc:
+        return _pdu_error(exc)
+
+    # authorization + required acknowledgements (dry-run evaluation)
+    required_acks = []
+    authorized = True
+    denial = None
+    if protected and action == "off":
+        authorized = False
+        denial = "PROTECTED_OFF_FORBIDDEN: OFF on a protected outlet is forbidden for everyone"
+    elif protected:
+        required_acks.append("acknowledge_protected_device")
+        if actor and not actor.can_override_protected():
+            authorized = False
+            denial = "protected override requires pdu-admin (admin_override + acknowledge)"
+        if pdu.get("ip") == action_service.SELF_HOST_IP and outlet_n == action_service.SELF_HOST_OUTLET:
+            required_acks.append("acknowledge_controller_may_go_offline")
+
+    return jsonify({
+        "actuated": False,
+        "action": action,
+        "target": {"asset_id": asset_id, "pdu_id": pdu.get("asset_id", ip),
+                   "ip": ip, "outlet": outlet_n, "label": label},
+        "current_state": state,
+        "protected": protected,
+        "caller": actor.username,
+        "caller_authorized": authorized,
+        "denial_reason": denial,
+        "required_acknowledgements": required_acks,
+        "mapping_revision": rt.CONFIG.get("mapping_revision", "labels@current-sha"),
+        "notes": "Dry-run only: this endpoint never actuates. Verify identity immediately before a real submission.",
+    })
+
+
+@api_v1.get("/capabilities")
+def capabilities():
+    """Phase 5: safe metadata for consumers (no secrets, no auth required)."""
+    from api_assets import build_asset_index
+
+    n_assets = 0
+    try:
+        n_assets = len(build_asset_index(rt.CONFIG["pdus"]))
+    except ValueError:
+        n_assets = -1  # ambiguous mapping surfaced as -1 (never actuation-blocking data)
+    return jsonify({
+        "api_version": API_VERSION,
+        "backend_mode": rt.backend_mode(),
+        "asset_count": n_assets,
+        "supported_actions": ["on", "off", "reboot"],
+        "endpoints": [
+            "GET /api/v1/health", "GET /api/v1/me",
+            "GET /api/v1/pdus", "GET /api/v1/pdus/{key}", "GET /api/v1/pdus/{key}/outlets/{n}",
+            "POST /api/v1/pdus/{key}/outlets/{n}/actions", "POST /api/v1/actions/batch",
+            "GET /api/v1/jobs/{job_id}",
+            "GET /api/v1/assets", "GET /api/v1/assets/{asset_id}",
+            "POST /api/v1/assets/{asset_id}/actions",
+            "POST /api/v1/action-plans (dry-run)",
+            "GET /api/v1/capabilities",
+        ],
+        "rate_limits": {"get_per_min": 120, "post_per_min": 20},
+        "protected_policy": "OFF forbidden for everyone on protected outlets; reboot = native cycle only",
+    })
+
+
+@api_v1.get("/version")
+def version():
+    """Release identity (Phase 5): Git SHA + build time from the release manifest."""
+    import json as _json
+
+    manifest = {}
+    for p in ("/opt/pdu-control/current/release_manifest.json",
+              "/opt/pdu-control/release_manifest.json"):
+        try:
+            manifest = _json.load(open(p))
+            break
+        except (OSError, ValueError):
+            continue
+    return jsonify({
+        "api_version": API_VERSION,
+        "git_sha": manifest.get("git_sha", "unknown"),
+        "build_time": manifest.get("build_time", "unknown"),
+        "backend_mode": rt.backend_mode(),
+    })
