@@ -2,7 +2,7 @@
 
 This is the single lean architecture document for the MARION-IA-USA PDU Manager. It follows the arc42 section structure and uses Mermaid for diagrams.
 
-Implementation details that have not yet been captured from VM154 are explicitly marked **Unknown / verify**. Do not fill those gaps with guesses.
+Implementation details not yet captured are explicitly marked **Unknown / verify**. Do not fill those gaps with guesses. (The 2026-09-25 capture came from VM154, now the fallback host; production runs on VM156 since 2026-09-27.)
 
 ## 1. Introduction and Goals
 
@@ -46,13 +46,13 @@ See `../REQUIREMENTS.md` for the complete requirement set.
 
 ## 2. Architecture Constraints
 
-- Production currently runs on VM154 hosted by `MIAM-00133`.
-- Production UI is currently reached at `https://10.0.20.154/`.
+- Production currently runs on **VM156** hosted by `MIAM-00133` (2026-09-27 cutover; VM154 = powered-off fallback, `onboot=0`).
+- Production UI is currently reached at `https://10.0.20.156/` (API root `/api/v1`; VM154 answers nothing while powered off).
 - Managed PDU endpoints exist on the private `10.0.20.x` management network, including `10.0.20.151`, `.152`, and `.153`.
 - Automated CI/deployment validation must not use real outlet actuation.
 - Secrets must not be committed to Git.
 - Human approval is required before merge under the current repository governance model.
-- Production deployment should restart application services rather than rebooting VM154 when a service restart is sufficient.
+- Production deployment should restart application services rather than rebooting the production VM (VM156) when a service restart is sufficient.
 - The current runtime stack must be captured before selecting a new deployment technology.
 
 ## 3. Context and Scope
@@ -61,7 +61,7 @@ See `../REQUIREMENTS.md` for the complete requirement set.
 
 ```mermaid
 flowchart LR
-    Operator[Infrastructure Operator] -->|HTTPS| UI[PDU Manager\nVM154 / 10.0.20.154]
+    Operator[Infrastructure Operator] -->|HTTPS| UI[PDU Manager\nVM156 / 10.0.20.156]
     UI -->|Authenticate - verify live integration| LLDAP[LLDAP\n10.0.20.101]
     UI -->|PDU control/status\nexact protocol to verify| PDU151[PDU\n10.0.20.151]
     UI -->|PDU control/status\nexact protocol to verify| PDU152[PDU\n10.0.20.152]
@@ -202,7 +202,7 @@ flowchart TB
 
 - VM154 `pdu-control`: Debian 12 bookworm, kernel 6.1.0-53-cloud-amd64, 1 vCPU-class (2 assigned), 1 GiB RAM, 16 GiB disk, qemu-guest-agent active, timezone America/Chicago.
 - Service: systemd `pdu-control.service` (enabled, `Restart=always`, `RestartSec=5`, `User=pducontrol`, `WorkingDirectory=/opt/pdu-control`, logs to journald). ExecStart: `/opt/pdu-control/venv/bin/gunicorn --workers 1 --threads 4 --bind 127.0.0.1:5000 --timeout 120 --access-logfile - --error-logfile - app:app`.
-- Reverse proxy: nginx 1.22.1, site `/etc/nginx/sites-available/pdu-control`; TLS self-signed cert at `/etc/nginx/ssl/pdu-control.{crt,key}` (CN=10.0.20.154, SAN IP+DNS:pdu-control, valid 2026-09-11 → 2031-09-10, sha256 fingerprint `137308d592260184fd75b7a555e27f61332a8c7ffe5feb1f58d1c5553b2221a9`).
+- Reverse proxy: nginx 1.22.1, site `/etc/nginx/sites-available/pdu-control`; TLS self-signed cert at `/etc/nginx/ssl/pdu-control.{crt,key}` (CN=10.0.20.156, SAN IP+DNS:pdu-control, valid 2026-09-11 → 2031-09-10, sha256 fingerprint `137308d592260184fd75b7a555e27f61332a8c7ffe5feb1f58d1c5553b2221a9`).
 - Firewall: nftables `inet pdu_filter` (enabled): SSH 22 + web 80/443 allowed from 10.0.20.0/24 and 10.0.10.0/24 only; 80/443 dropped otherwise.
 - App data: config `/etc/pdu-control/config.json` (640 root:pducontrol), secrets `/etc/pdu-control/secrets.env` (640 root:pducontrol, 9 B64 vars), audit `/var/log/pdu-control/audit.log{,.jsonl}`, idempotency `/var/lib/pdu-control/idempotency.json`, pending-reboot marker `/var/lib/pdu-control/pending_reboot.json`.
 - Auth: LLDAP at 10.0.20.101:3890 (plain LDAP, no TLS, base `dc=example,dc=com`); UI session auth (12h, HttpOnly, SameSite=Lax; Secure when `PDU_SECURE_COOKIES=1`) with emergency-local root fallback (web only, == pdu-admin); `/api/v1` HTTP Basic with LLDAP credentials; groups `pdu-viewer/pdu-operator/pdu-admin/pdu-ai-agent/pdu-ai-admin-override`.

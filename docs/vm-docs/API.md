@@ -1,6 +1,6 @@
 # PDU Manager API v1 — Agent Guide
 
-**Base URL:** `https://10.0.20.154/api/v1` (TLS, self-signed cert — pin the fingerprint below)
+**Base URL:** `https://10.0.20.156/api/v1` (TLS, self-signed cert — pin the fingerprint below)
 **Auth:** HTTP Basic with your **LLDAP username/password**. No API keys, no tokens.
 **All responses:** JSON.
 
@@ -16,7 +16,7 @@ otherwise use `-k` on trusted management networks only.
 ## Safe credential handling
 
 ```bash
-export PDU_API_BASE='https://10.0.20.154/api/v1'
+export PDU_API_BASE='https://10.0.20.156/api/v1'
 export PDU_LDAP_USER='miam_0154_pdu_agent'
 read -rsp 'LLDAP password: ' PDU_LDAP_PASSWORD; export PDU_LDAP_PASSWORD
 AUTH=(-u "$PDU_LDAP_USER:$PDU_LDAP_PASSWORD")
